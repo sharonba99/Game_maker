@@ -1,5 +1,5 @@
 import os
-
+from trivia import trivia_bp
 from flask import Flask, request, jsonify
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -18,6 +18,7 @@ def homepage():
     return "Welcome to Trivia maker"
 
 app.register_blueprint(user_bp, url_prefix='/users')
+app.register_blueprint(trivia_bp, url_prefix='/trivia')
 
 
 if __name__ == '__main__':
