@@ -9,6 +9,7 @@ current_id = 1
 
 user_bp = Blueprint('user_bp', __name__)
 
+
 # engine = create_engine(f"sqlite:///{db_path}", echo=True)
 # db_connect = sessionmaker(bind=engine)
 # db_session = db_connect()
