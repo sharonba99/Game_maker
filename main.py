@@ -1,8 +1,6 @@
-import os
+
 from trivia import trivia_bp
-from flask import Flask, request, jsonify
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from flask import Flask
 
 from utils.db import db
 from users import user_bp

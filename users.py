@@ -1,24 +1,17 @@
-from flask import Blueprint, request, jsonify
-from sqlalchemy.orm import sessionmaker
+from flask import Blueprint, request
+
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from utils.db import db, Users
 from utils.utils import users
-from sqlalchemy import create_engine
+
 current_id = 1
 
 user_bp = Blueprint('user_bp', __name__)
 
 
-# engine = create_engine(f"sqlite:///{db_path}", echo=True)
-# db_connect = sessionmaker(bind=engine)
-# db_session = db_connect()
-
 @user_bp.get('/')
 def show_users():
     return users
-    # users = db_session.query(Users).all()
-    # return jsonify([u.to_dict() for u in users])
 
 @user_bp.post('/signup')
 def signup():
