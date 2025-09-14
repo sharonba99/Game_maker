@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from utils.db import db
 from blueprints.users import user_bp
 from blueprints.library import library_bp
+from blueprints.play import play_bp
 from flask import request, redirect
 
 
@@ -59,6 +60,7 @@ def create_app() -> Flask:
     # Blueprints
     app.register_blueprint(user_bp, url_prefix="/users")
     app.register_blueprint(library_bp, url_prefix="/library")
+    app.register_blueprint(play_bp, url_prefix="/play")
 
     return app
 

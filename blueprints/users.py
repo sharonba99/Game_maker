@@ -40,3 +40,21 @@ def login():
 
     return jsonify({"ok": True, "data": {"message": "login successful"}}), 200
 
+@user_bp.get("/<int:user_id>")
+def get_user(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify(
+            {"ok": False, "error": {"code": "not_found", "message": f"User with ID {user_id} not found"}}), 404
+
+    return jsonify({
+        "ok": True,
+        "data": {
+            "id": user.id,
+            "username": user.username
+        }
+    }), 200
+
+@user_bp.delete("/<int:user_id>")
+def del_user(user_id):
+    user = User.query.get(user_id)
