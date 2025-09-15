@@ -16,12 +16,13 @@ def signup():
     data = request.get_json(silent=True) or {}
     username = data.get("username")
     password = data.get("password")
+    points = data.get("points")
     if not username or not password:
         return jsonify({"ok": False, "error": {"code": "bad_request", "message": "username and password are required"}}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({"ok": False, "error": {"code": "duplicate", "message": "user already exists"}}), 409
 
-    u = User(username=username, password_hash=generate_password_hash(password))
+    u = User(username=username, password_hash=generate_password_hash(password), points=points)
     db.session.add(u)
     db.session.commit()
     return jsonify({"ok": True, "data": {"id": u.id, "username": u.username}}), 201
@@ -58,3 +59,9 @@ def get_user(user_id):
 @user_bp.delete("/<int:user_id>")
 def del_user(user_id):
     user = User.query.get(user_id)
+    if not user:
+        return jsonify(
+            {"ok": False, "error": {"code": "not_found", "message": f"User with ID {user_id} not found"}}), 404
+    db.session.delete(user)
+    db.session.commit()
+    return f"User {user.username} has been deleted", 200

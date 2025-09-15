@@ -1,9 +1,12 @@
+from email.policy import default
+
 from utils.db import db
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
+    points = db.Column(db.Integer, default=0)
 
 class TriviaQuestion(db.Model):  # נשאיר את השם במחלקה, אבל נציג אותה כ-Library החוצה
     id = db.Column(db.Integer, primary_key=True)
