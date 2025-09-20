@@ -1,5 +1,27 @@
+﻿# --- Python / Flask ---
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.log
+.env
 .venv/
-app.db
+venv/
+# SQLite DB 
+instance/*.db
+instance/*.sqlite
+
+# IDE / OS
+.idea/
+.vscode/
 .DS_Store
+Thumbs.db
+
+# --- Node / Vite (frontend) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+
+# package-lock.json
