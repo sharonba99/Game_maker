@@ -11,7 +11,7 @@ def err(msg, status=400):
     return jsonify({"ok": False, "error": msg}), status
 
 #Add new multiple-choice question
-@library_bp.post("/library/questions/add")
+@library_bp.post("/questions/add")
 def add_question():
     d = request.get_json(silent=True) or {}
     req = ["text", "A", "B", "C", "D", "correct"]
@@ -28,13 +28,14 @@ def add_question():
         choice_d=d["D"],
         correct=d["correct"],
         difficulty=d.get("difficulty", "Easy")  # default Easy
+
     )
     db.session.add(q)
     db.session.commit()
     return ok({"id": q.id}, 201)
 
 #List questions
-@library_bp.get("/library/questions")
+@library_bp.get("/questions")
 def list_questions():
     rows = TriviaQuestion.query.limit(50).all()
     return ok([{

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from sqlalchemy import func
 from utils.db import db
-from models import TriviaQuestion, Quiz, QuizSession, LeaderboardEntry
+from models import TriviaQuestion, QuizSession, LeaderboardEntry, Quiz
 from datetime import datetime, timedelta
 
 play_bp = Blueprint("play_bp", __name__)
@@ -27,7 +27,7 @@ def _seconds_remaining(session):
     remaining = int(max(0, session.time_limit_sec - elapsed))
     return remaining
 
-@play_bp.post("/play/session/create")
+@play_bp.post("/session/create")
 def create_session():
     d = request.get_json(silent=True) or {}
     player = (d.get("player") or "").strip()
@@ -59,7 +59,7 @@ def create_session():
     db.session.add(s); db.session.commit()
     return ok({ "session_id": s.id, "count": len(ids), "time_limit_sec": time_limit_sec }, 201)
 
-@play_bp.get("/play/session/<int:sid>/question")
+@play_bp.get("/session/<int:sid>/question")
 def get_question(sid):
     s = QuizSession.query.get(sid)
     if not s: return err("session not found", 404)
@@ -82,7 +82,7 @@ def get_question(sid):
         "seconds_remaining": _seconds_remaining(s)
     })
 
-@play_bp.post("/play/session/<int:sid>/answer")
+@play_bp.post("/session/<int:sid>/answer")
 def answer(sid):
     d = request.get_json(silent=True) or {}
     selected = (d.get("selected") or "").strip().upper()
@@ -134,7 +134,7 @@ def answer(sid):
         "seconds_remaining": rem
     })
 
-@play_bp.get("/play/leaderboard")
+@play_bp.get("/leaderboard")
 def leaderboard():
     rows = (LeaderboardEntry.query
             .order_by(LeaderboardEntry.score.desc(), LeaderboardEntry.created_at.asc())

@@ -11,6 +11,7 @@ class TriviaQuestion(db.Model):  # נשאיר את השם במחלקה, אבל �
     answer = db.Column(db.String(255), nullable=False)
     topic = db.Column(db.String(80), nullable=True)  # NEW: subject/topic instead of difficulty
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    #quiz_number = db.Column(db.int(80), nullable=False)
 
 class QuizSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -27,4 +28,8 @@ class LeaderboardEntry(db.Model):  # NEW
     score = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
-
+class Quiz(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    topic = db.Column(db.String(120), nullable=True)
+    question_ids_csv = db.Column(db.Text, nullable=True)
