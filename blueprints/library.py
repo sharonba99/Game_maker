@@ -51,7 +51,7 @@ def list_questions():
     } for r in rows])
 
 #Create a quiz from question IDs or by topic
-@library_bp.post("/library/quizzes/create")
+@library_bp.post("/quizzes/create")
 def create_quiz():
     d = request.get_json(silent=True) or {}
     name = d.get("name")
