@@ -1,230 +1,276 @@
+import random
 from flask import Blueprint, request, jsonify
 from sqlalchemy import func
 from utils.db import db
-from models import TriviaQuestion
+from models import (
+    TriviaQuestion,
+    Quiz,
+    QuizSession,
+    QuizAnswerLog,
+    LeaderboardEntry,
+)
 
 library_bp = Blueprint("library_bp", __name__)
 
 # ---------- helpers ----------
-
 def j_ok(data=None, status=200):
     return jsonify({"ok": True, "data": data}), status
 
-def j_err(code: str, message: str, status=400):
-    return jsonify({"ok": False, "error": {"code": code, "message": message}}), status
+def j_err(code, msg, status=400):
+    return jsonify({"ok": False, "error": {"code": code, "message": msg}}), status
 
-def normalize(text: str | None) -> str:
-    return (text or "").strip()
+def norm(x): return (x or "").strip()
 
-def normalize_key(text: str | None) -> str:
-    return (text or "").strip().lower()
+def ensure_answers(arr):
+    if not isinstance(arr, list) or len(arr) != 4:
+        return False, "answers must be an array of 4 items"
+    if any(not norm(a) for a in arr):
+        return False, "answers must not contain empty texts"
+    return True, None
 
-# ---------- routes ----------
-
-@library_bp.get("/")
+# ---------- Questions (Library) ----------
+@library_bp.get("/questions")
 def list_questions():
-    """List questions with optional pagination: ?limit=20&offset=0"""
-    try:
-        limit = int(request.args.get("limit", 50))
-        offset = int(request.args.get("offset", 0))
-        limit = max(1, min(limit, 200)) 
-
-        q = TriviaQuestion.query.order_by(TriviaQuestion.id)
-        total = q.count()
-        rows = q.offset(offset).limit(limit).all()
-
-        data = [
-            {"id": r.id, "question": r.question, "answer": r.answer, "topic": r.topic}
-            for r in rows
-        ]
-        return j_ok({"items": data, "total": total, "limit": limit, "offset": offset})
-    except Exception as e:
-        return j_err("server_error", str(e), 500)
-
-@library_bp.get("/<int:item_id>")
-def get_question(item_id: int):
-    """Get single question by id"""
-    row = TriviaQuestion.query.get(item_id)
-    if not row:
-        return j_err("not_found", "question not found", 404)
-    return j_ok({"id": row.id, "question": row.question, "answer": row.answer, "topic": row.topic})
+    rows = TriviaQuestion.query.order_by(TriviaQuestion.id).all()
+    data = [{
+        "id": r.id,
+        "question": r.question,
+        "topic": r.topic,
+        "difficulty": r.difficulty
+    } for r in rows]
+    return j_ok(data)
 
 @library_bp.post("/add")
 def add_question():
     """
-    Add a single question.
-    JSON: { "question": "...", "answer": "...", "topic": "Math" }
+    JSON:
+    {
+      "question": "2+2?",
+      "topic": "Math",
+      "difficulty": "easy",
+      "answers": ["4","5","3","22"]  # first is correct
+    }
     """
     try:
         body = request.get_json(silent=True) or {}
-        question = normalize(body.get("question"))
-        answer   = normalize(body.get("answer"))
-        topic    = normalize(body.get("topic")) or None
+        question = norm(body.get("question"))
+        topic = norm(body.get("topic")) or None
+        difficulty = norm(body.get("difficulty")) or None
+        answers = body.get("answers")
 
-        if not question or not answer:
-            return j_err("bad_request", "question and answer are required", 400)
+        ok, err = ensure_answers(answers)
+        if not question or not ok:
+            return j_err("bad_request", err or "question and answers[4] are required", 400)
 
-        exists = (
-            db.session.query(TriviaQuestion.id)
-            .filter(
-                func.lower(TriviaQuestion.question) == normalize_key(question),
-                (TriviaQuestion.topic == topic) | (topic is None and TriviaQuestion.topic.is_(None))
-            )
-            .first()
-        )
-        if exists:
+        dup = TriviaQuestion.query.filter_by(question=question, topic=topic).first()
+        if dup:
             return j_err("duplicate", "question already exists", 409)
 
-        row = TriviaQuestion(question=question, answer=answer, topic=topic)
-        db.session.add(row)
-        db.session.commit()
+        row = TriviaQuestion(question=question, topic=topic, difficulty=difficulty, answers=answers)
+        db.session.add(row); db.session.commit()
         return j_ok({"id": row.id}, 201)
-
     except Exception as e:
         db.session.rollback()
         return j_err("server_error", str(e), 500)
 
-@library_bp.post("/bulk_add")
-def bulk_add():
+@library_bp.get("/question/<int:item_id>")
+def get_question_public(item_id: int):
+    r = TriviaQuestion.query.get(item_id)
+    if not r:
+        return j_err("not_found", "question not found", 404)
+    options = list(r.answers); random.shuffle(options)
+    return j_ok({
+        "id": r.id,
+        "question": r.question,
+        "topic": r.topic,
+        "difficulty": r.difficulty,
+        "options": options
+    })
+
+# ---------- Topics ----------
+@library_bp.get("/topics")
+def topics():
+    rows = db.session.query(TriviaQuestion.topic) \
+        .filter(TriviaQuestion.topic.isnot(None)) \
+        .group_by(TriviaQuestion.topic).all()
+    return j_ok([t[0] for t in rows])
+
+# ---------- Quizzes ----------
+@library_bp.post("/quizzes")
+def create_quiz():
     """
-    Add multiple questions at once.
-    JSON: { "items": [ {question, answer, topic?}, ... ] }
-    Returns counts and ids of inserted items; duplicates are skipped.
+    JSON:
+    {
+      "title": "Math — Easy Set A",
+      "topic": "Math",
+      "difficulty": "easy",
+      "question_ids": [1,5,7,9],  # optional
+      "count": 5                  # used if question_ids empty
+    }
     """
-    try:
-        body = request.get_json(silent=True) or {}
-        items = body.get("items") or []
-        if not isinstance(items, list) or not items:
-            return j_err("bad_request", "items array is required", 400)
+    b = request.get_json(silent=True) or {}
+    title = norm(b.get("title"))
+    topic = norm(b.get("topic"))
+    difficulty = norm(b.get("difficulty")) or None
+    qids = b.get("question_ids") or []
+    count = int(b.get("count") or 5)
 
-        inserted = []
-        skipped = []
+    if not title or not topic:
+        return j_err("bad_request", "title & topic are required", 400)
 
-        for i, it in enumerate(items):
-            q_text = normalize(it.get("question"))
-            a_text = normalize(it.get("answer"))
-            t_text = normalize(it.get("topic")) or None
+    if not qids:
+        qs = TriviaQuestion.query.filter(TriviaQuestion.topic == topic)
+        if difficulty:
+            qs = qs.filter(TriviaQuestion.difficulty == difficulty)
+        allq = qs.all()
+        if not allq:
+            return j_err("no_questions", "no questions for this topic", 404)
+        count = max(1, min(count, len(allq)))
+        qids = [q.id for q in random.sample(allq, count)]
 
-            if not q_text or not a_text:
-                skipped.append({"index": i, "reason": "missing fields"})
-                continue
+    row = Quiz(title=title, topic=topic, difficulty=difficulty, question_ids=qids)
+    db.session.add(row); db.session.commit()
+    return j_ok({"id": row.id}, 201)
 
-            dup = (
-                db.session.query(TriviaQuestion.id)
-                .filter(
-                    func.lower(TriviaQuestion.question) == normalize_key(q_text),
-                    (TriviaQuestion.topic == t_text) | (t_text is None and TriviaQuestion.topic.is_(None))
-                )
-                .first()
-            )
-            if dup:
-                skipped.append({"index": i, "reason": "duplicate"})
-                continue
+@library_bp.get("/quizzes")
+def list_quizzes():
+    topic = norm(request.args.get("topic")) or None
+    q = Quiz.query
+    if topic:
+        q = q.filter(Quiz.topic == topic)
+    rows = q.order_by(Quiz.id.desc()).all()
+    data = [{
+        "id": r.id,
+        "title": r.title,
+        "topic": r.topic,
+        "difficulty": r.difficulty,
+        "count": len(r.question_ids)
+    } for r in rows]
+    return j_ok(data)
 
-            row = TriviaQuestion(question=q_text, answer=a_text, topic=t_text)
-            db.session.add(row)
-            inserted.append(row)
-
-        db.session.commit()
-        return j_ok({
-            "inserted_ids": [r.id for r in inserted],
-            "inserted": len(inserted),
-            "skipped": skipped,
-            "total_received": len(items)
-        }, 201)
-
-    except Exception as e:
-        db.session.rollback()
-        return j_err("server_error", str(e), 500)
-
-@library_bp.put("/<int:item_id>")
-def update_question(item_id: int):
+# ---------- Session (game flow) ----------
+@library_bp.post("/session/create")
+def session_create():
     """
-    Update an existing question.
-    JSON (partial allowed): { "question": "...", "answer": "...", "topic": "..." }
+    JSON: { "player_name": "neomi", "quiz_id": 12 }
     """
-    try:
-        row = TriviaQuestion.query.get(item_id)
-        if not row:
-            return j_err("not_found", "question not found", 404)
+    b = request.get_json(silent=True) or {}
+    player = norm(b.get("player_name")) or "guest"
+    quiz_id = b.get("quiz_id")
+    if not quiz_id:
+        return j_err("bad_request", "quiz_id is required", 400)
 
-        body = request.get_json(silent=True) or {}
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        return j_err("not_found", "quiz not found", 404)
 
-        new_q = normalize(body.get("question")) if "question" in body else row.question
-        new_a = normalize(body.get("answer"))   if "answer"   in body else row.answer
-        new_t = normalize(body.get("topic")) or None if "topic" in body else row.topic
+    s = QuizSession(
+        quiz_id=quiz.id,
+        player_name=player,
+        score=0,
+        total_questions=len(quiz.question_ids),
+        current_index=0
+    )
+    db.session.add(s); db.session.commit()
+    return j_ok({"session_id": s.id})
 
-        if not new_q or not new_a:
-            return j_err("bad_request", "question and answer are required", 400)
+@library_bp.get("/session/<int:sid>/current")
+def session_current(sid: int):
+    s = QuizSession.query.get(sid)
+    if not s: return j_err("not_found", "session not found", 404)
+    quiz = Quiz.query.get(s.quiz_id)
 
-        # בדיקת כפילות אם השתנה הטקסט/נושא
-        if (normalize_key(new_q) != normalize_key(row.question)) or ((new_t or "") != (row.topic or "")):
-            dup = (
-                db.session.query(TriviaQuestion.id)
-                .filter(
-                    TriviaQuestion.id != row.id,
-                    func.lower(TriviaQuestion.question) == normalize_key(new_q),
-                    (TriviaQuestion.topic == new_t) | (new_t is None and TriviaQuestion.topic.is_(None))
-                )
-                .first()
-            )
-            if dup:
-                return j_err("duplicate", "question already exists", 409)
+    if s.current_index >= len(quiz.question_ids):
+        return j_ok({"finished": True, "score": s.score})
 
-        row.question = new_q
-        row.answer   = new_a
-        row.topic    = new_t
-        db.session.commit()
+    qid = quiz.question_ids[s.current_index]
+    q = TriviaQuestion.query.get(qid)
+    options = list(q.answers); random.shuffle(options)
 
-        return j_ok({"id": row.id})
+    return j_ok({
+        "finished": False,
+        "question_id": q.id,
+        "question": q.question,
+        "options": options,
+        "index": s.current_index,
+        "total": s.total_questions
+    })
 
-    except Exception as e:
-        db.session.rollback()
-        return j_err("server_error", str(e), 500)
-
-@library_bp.delete("/<int:item_id>")
-def delete_question(item_id: int):
-    """Delete question by id"""
-    try:
-        row = TriviaQuestion.query.get(item_id)
-        if not row:
-            return j_err("not_found", "question not found", 404)
-        db.session.delete(row)
-        db.session.commit()
-        return j_ok({"id": item_id})
-    except Exception as e:
-        db.session.rollback()
-        return j_err("server_error", str(e), 500)
-
-@library_bp.get("/search")
-def search_questions():
+@library_bp.post("/session/<int:sid>/answer")
+def session_answer(sid: int):
     """
-    Search/filter with pagination:
-    /library/search?q=capital&topic=Geography&limit=20&offset=0
+    JSON: { "answer": "Paris", "client_ms": 1800 }
+    Scoring: correct → max(100, 1000 - client_ms/2); wrong → 0
     """
-    try:
-        q_text = normalize(request.args.get("q"))
-        topic  = normalize(request.args.get("topic")) or None
-        limit  = max(1, min(int(request.args.get("limit", 50)), 200))
-        offset = max(0, int(request.args.get("offset", 0)))
+    b = request.get_json(silent=True) or {}
+    answer = norm(b.get("answer"))
+    client_ms = int(b.get("client_ms") or 0)
 
-        query = TriviaQuestion.query
-        if q_text:
-            like = f"%{q_text}%"
-            query = query.filter(TriviaQuestion.question.ilike(like))
-        if topic:
-            query = query.filter(TriviaQuestion.topic == topic)
+    s = QuizSession.query.get(sid)
+    if not s: return j_err("not_found", "session not found", 404)
+    quiz = Quiz.query.get(s.quiz_id)
 
-        total = query.count()
-        rows = query.order_by(TriviaQuestion.id).offset(offset).limit(limit).all()
+    if s.current_index >= len(quiz.question_ids):
+        return j_ok({"finished": True, "score": s.score})
 
-        data = [
-            {"id": r.id, "question": r.question, "answer": r.answer, "topic": r.topic}
-            for r in rows
-        ]
-        return j_ok({"items": data, "total": total, "limit": limit, "offset": offset})
-    except Exception as e:
-        return j_err("server_error", str(e), 500)
+    qid = quiz.question_ids[s.current_index]
+    q = TriviaQuestion.query.get(qid)
+
+    is_correct = (answer.lower() == q.answers[0].strip().lower())
+    awarded = 0
+    if is_correct:
+        awarded = max(100, 1000 - (client_ms // 2))
+        s.score += awarded
+
+    log = QuizAnswerLog(
+        session_id=s.id,
+        question_id=q.id,
+        is_correct=is_correct,
+        client_ms=client_ms,
+        awarded=awarded
+    )
+    db.session.add(log)
+
+    s.current_index += 1
+    finished = s.current_index >= len(quiz.question_ids)
+
+    if finished:
+        lb = LeaderboardEntry(quiz_id=quiz.id, player_name=s.player_name, score=s.score)
+        db.session.add(lb)
+
+    db.session.commit()
+
+    if finished:
+        return j_ok({"finished": True, "score": s.score})
+
+    next_q = TriviaQuestion.query.get(quiz.question_ids[s.current_index])
+    opts = list(next_q.answers); random.shuffle(opts)
+    return j_ok({
+        "finished": False,
+        "score": s.score,
+        "next": {
+            "question_id": next_q.id,
+            "question": next_q.question,
+            "options": opts,
+            "index": s.current_index,
+            "total": s.total_questions
+        }
+    })
+
+# ---------- Leaderboard ----------
+@library_bp.get("/leaderboard")
+def leaderboard():
+    quiz_id = request.args.get("quiz_id", type=int)
+    if not quiz_id:
+        return j_err("bad_request", "quiz_id is required", 400)
+
+    rows = LeaderboardEntry.query.filter_by(quiz_id=quiz_id) \
+        .order_by(LeaderboardEntry.score.desc(), LeaderboardEntry.id.asc()) \
+        .limit(10).all()
+
+    top = [{"player_name": r.player_name, "score": r.score} for r in rows]
+    return j_ok({"top": top})
+
 
 
  
