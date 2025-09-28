@@ -16,8 +16,8 @@ class TriviaQuestion(db.Model):
     question = db.Column(db.String, nullable=False)
     topic = db.Column(db.String, nullable=True)
     difficulty = db.Column(db.String, nullable=True)
-    answers = db.Column(JSON, nullable=False)
-    quiz_id = db.Column(db.Integer, db.ForeignKey("quiz.id"), nullable=True)
+    answers = db.Column(JSON, nullable=False)  # ["correct", "wrong1", "wrong2", "wrong3"]
+    quiz_id = db.Column(db.Integer, db.ForeignKey("quiz.id"), nullable=False)
     quiz = db.relationship("Quiz", back_populates="questions")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -29,10 +29,7 @@ class Quiz(db.Model):
     topic = db.Column(db.String, nullable=False)
     difficulty = db.Column(db.String, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    questions = db.relationship(
-    "TriviaQuestion",
-    back_populates="quiz",
-    cascade="all, delete-orphan")
+    questions = db.relationship("TriviaQuestion", back_populates="quiz", cascade="all, delete-orphan")
 
 
 class QuizSession(db.Model):
@@ -43,10 +40,8 @@ class QuizSession(db.Model):
     score = db.Column(db.Integer, default=0)
     total_questions = db.Column(db.Integer, nullable=False)
     current_index = db.Column(db.Integer, default=0)
-    question_started_at = db.Column(db.DateTime, nullable=True)
-    time_limit_sec = db.Column(db.Integer, nullable=True)
-    streak = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    quiz = db.relationship("Quiz")
 
 
 class QuizAnswerLog(db.Model):
@@ -58,7 +53,6 @@ class QuizAnswerLog(db.Model):
     client_ms = db.Column(db.Integer, default=0)
     awarded = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
 
 class LeaderboardEntry(db.Model):
     __tablename__ = "leaderboard_entry"
