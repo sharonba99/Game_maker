@@ -94,6 +94,7 @@ export default function App() {
   async function startQuiz() {
     if (!quizId) { setError("Choose quiz"); return; }
     setError(null);
+    setInfo(null);
     const res = await api.post<{ session_id: number }>(`/library/session/create`, { player_name: player, quiz_id: quizId });
     if (!res.ok) { setError(res.error.message); return; }
     setSid(res.data.session_id);
@@ -137,6 +138,7 @@ export default function App() {
   // manage actions
   async function addQuestion() {
     setError(null);
+    setInfo(null);
     const answers = [a1, a2, a3, a4];
     const res = await api.post<{ id: number }>(`/library/questions`, {
       question: qText, topic: qTopic, difficulty: qDiff, answers, quiz_id: id
@@ -146,6 +148,7 @@ export default function App() {
     const t = await api.get<string[]>("/library/topics");
     if (t.ok) setTopics(t.data);
     setQText(""); setA1(""); setA2(""); setA3(""); setA4("");
+    setInfo("New question was created successfully");
   }
 
   async function createQuiz() {
@@ -157,7 +160,7 @@ export default function App() {
     if (!res.ok) { setError(res.error.message); return; }
     if (topic === mTopic) await loadQuizzes(topic);
     setMTitle(""); setMTopic(""); setMDiff(""); setMCount(5);
-    setInfo(res.data.id.toString());
+    setInfo("New quiz was created successfully. Quiz ID is " + res.data.id.toString());
   }
 
   // UI bits
