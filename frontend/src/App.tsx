@@ -66,6 +66,7 @@ export default function App() {
   const [a2, setA2] = useState("");
   const [a3, setA3] = useState("");
   const [a4, setA4] = useState("");
+  const [id, setId] = useState("");
 
   const [mTitle, setMTitle] = useState("");
   const [mTopic, setMTopic] = useState("");
@@ -73,6 +74,7 @@ export default function App() {
   const [mCount, setMCount] = useState(5);
 
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   // load topics initially
   useEffect(() => {
@@ -136,8 +138,8 @@ export default function App() {
   async function addQuestion() {
     setError(null);
     const answers = [a1, a2, a3, a4];
-    const res = await api.post<{ id: number }>(`/library/add`, {
-      question: qText, topic: qTopic, difficulty: qDiff, answers
+    const res = await api.post<{ id: number }>(`/library/questions`, {
+      question: qText, topic: qTopic, difficulty: qDiff, answers, quiz_id: id
     });
     if (!res.ok) { setError(res.error.message); return; }
     // refresh topics list
@@ -148,12 +150,14 @@ export default function App() {
 
   async function createQuiz() {
     setError(null);
+    setInfo(null);
     const res = await api.post<{ id: number }>(`/library/quizzes`, {
       title: mTitle, topic: mTopic, difficulty: mDiff, count: mCount
     });
     if (!res.ok) { setError(res.error.message); return; }
     if (topic === mTopic) await loadQuizzes(topic);
     setMTitle(""); setMTopic(""); setMDiff(""); setMCount(5);
+    setInfo(res.data.id.toString());
   }
 
   // UI bits
@@ -181,6 +185,10 @@ export default function App() {
 
       {error && (
         <div style={{ color: "#b00", marginBottom: 8 }}>Error: {error}</div>
+      )}
+
+      {info && (
+        <div style={{ color: "rgba(0, 187, 34, 1)", marginBottom: 8 }}>Info: {info}</div>
       )}
 
       {/* Lobby */}
@@ -282,6 +290,8 @@ export default function App() {
             <input placeholder="wrong 1" value={a2} onChange={e=>setA2(e.target.value)} />
             <input placeholder="wrong 2" value={a3} onChange={e=>setA3(e.target.value)} />
             <input placeholder="wrong 3" value={a4} onChange={e=>setA4(e.target.value)} />
+            <div>Quiz ID</div>
+            <input value={id} onChange={e=>setId(e.target.value)} />
             <div style={{ marginTop: 8 }}>
               <button onClick={addQuestion}>Add Question</button>
             </div>
