@@ -17,7 +17,10 @@ class TriviaQuestion(db.Model):
     topic = db.Column(db.String, nullable=True)
     difficulty = db.Column(db.String, nullable=True)
     answers = db.Column(JSON, nullable=False)  # ["correct", "wrong1", "wrong2", "wrong3"]
+    quiz_id = db.Column(db.Integer, db.ForeignKey("quiz.id"), nullable=False)
+    quiz = db.relationship("Quiz", back_populates="questions")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 
 class Quiz(db.Model):
     __tablename__ = "quiz"
@@ -25,8 +28,9 @@ class Quiz(db.Model):
     title = db.Column(db.String, nullable=False)
     topic = db.Column(db.String, nullable=False)
     difficulty = db.Column(db.String, nullable=True)
-    question_ids = db.Column(JSON, nullable=False)  # [1,5,7,...]
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    questions = db.relationship("TriviaQuestion", back_populates="quiz", cascade="all, delete-orphan")
+
 
 class QuizSession(db.Model):
     __tablename__ = "quiz_session"
@@ -34,9 +38,11 @@ class QuizSession(db.Model):
     quiz_id = db.Column(db.Integer, db.ForeignKey("quiz.id"), nullable=False)
     player_name = db.Column(db.String, nullable=False)
     score = db.Column(db.Integer, default=0)
-    total_questions = db.Column(db.Integer, default=0)
+    total_questions = db.Column(db.Integer, nullable=False)
     current_index = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    quiz = db.relationship("Quiz")
+
 
 class QuizAnswerLog(db.Model):
     __tablename__ = "quiz_answer_log"

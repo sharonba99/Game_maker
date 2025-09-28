@@ -74,7 +74,7 @@ if __name__ == "__main__":
             QuizSession,
             LeaderboardEntry,
         )  # noqa: F401
-
+        db.drop_all() #use to reset database
         db.create_all()
 
     port = int(os.getenv("PORT", "5001"))

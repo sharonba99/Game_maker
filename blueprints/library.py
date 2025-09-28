@@ -40,7 +40,7 @@ def list_questions():
     } for r in rows]
     return j_ok(data)
 
-@library_bp.post("/add")
+@library_bp.post("/questions")
 def add_question():
     """
     JSON:
@@ -48,7 +48,8 @@ def add_question():
       "question": "2+2?",
       "topic": "Math",
       "difficulty": "easy",
-      "answers": ["4","5","3","22"]  # first is correct
+      "answers": ["4","5","3","22"],  # first is correct
+      "quiz_id": 1
     }
     """
     try:
@@ -57,21 +58,40 @@ def add_question():
         topic = norm(body.get("topic")) or None
         difficulty = norm(body.get("difficulty")) or None
         answers = body.get("answers")
+        quiz_id = body.get("quiz_id")
+
+        if not quiz_id:
+            return j_err("bad_request", "quiz_id is required", 400)
 
         ok, err = ensure_answers(answers)
         if not question or not ok:
             return j_err("bad_request", err or "question and answers[4] are required", 400)
 
-        dup = TriviaQuestion.query.filter_by(question=question, topic=topic).first()
-        if dup:
-            return j_err("duplicate", "question already exists", 409)
+        quiz = Quiz.query.get(quiz_id)
+        if not quiz:
+            return j_err("not_found", f"quiz {quiz_id} not found", 404)
 
-        row = TriviaQuestion(question=question, topic=topic, difficulty=difficulty, answers=answers)
-        db.session.add(row); db.session.commit()
+        dup = TriviaQuestion.query.filter_by(question=question, quiz_id=quiz_id).first()
+        if dup:
+            return j_err("duplicate", "question already exists in this quiz", 409)
+
+        topic = quiz.topic
+        row = TriviaQuestion(
+            question=question,
+            topic=topic,
+            difficulty=difficulty,
+            answers=answers,
+            quiz_id=quiz_id,
+        )
+        db.session.add(row)
+        db.session.commit()
+
         return j_ok({"id": row.id}, 201)
+
     except Exception as e:
         db.session.rollback()
         return j_err("server_error", str(e), 500)
+
 
 @library_bp.get("/question/<int:item_id>")
 def get_question_public(item_id: int):
@@ -103,34 +123,24 @@ def create_quiz():
     {
       "title": "Math — Easy Set A",
       "topic": "Math",
-      "difficulty": "easy",
-      "question_ids": [1,5,7,9],  # optional
-      "count": 5                  # used if question_ids empty
+      "difficulty": "easy"
     }
     """
     b = request.get_json(silent=True) or {}
     title = norm(b.get("title"))
     topic = norm(b.get("topic"))
     difficulty = norm(b.get("difficulty")) or None
-    qids = b.get("question_ids") or []
-    count = int(b.get("count") or 5)
 
     if not title or not topic:
         return j_err("bad_request", "title & topic are required", 400)
 
-    if not qids:
-        qs = TriviaQuestion.query.filter(TriviaQuestion.topic == topic)
-        if difficulty:
-            qs = qs.filter(TriviaQuestion.difficulty == difficulty)
-        allq = qs.all()
-        if not allq:
-            return j_err("no_questions", "no questions for this topic", 404)
-        count = max(1, min(count, len(allq)))
-        qids = [q.id for q in random.sample(allq, count)]
+    row = Quiz(title=title, topic=topic, difficulty=difficulty)
+    db.session.add(row)
+    db.session.commit()
 
-    row = Quiz(title=title, topic=topic, difficulty=difficulty, question_ids=qids)
-    db.session.add(row); db.session.commit()
     return j_ok({"id": row.id}, 201)
+
+
 
 @library_bp.get("/quizzes")
 def list_quizzes():
@@ -144,16 +154,41 @@ def list_quizzes():
         "title": r.title,
         "topic": r.topic,
         "difficulty": r.difficulty,
-        "count": len(r.question_ids)
+        "count": len(r.questions)
     } for r in rows]
     return j_ok(data)
+
+
+@library_bp.get("/quizzes/<int:quiz_id>")
+def get_quiz(quiz_id):
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        return j_err("not_found", f"quiz {quiz_id} not found", 404)
+
+    data = {
+        "id": quiz.id,
+        "title": quiz.title,
+        "topic": quiz.topic,
+        "difficulty": quiz.difficulty,
+        "count": len(quiz.questions),
+        "questions": [
+            {
+                "id": q.id,
+                "question": q.question,
+                "topic": q.topic,
+                "difficulty": q.difficulty,
+                "answers": q.answers
+            }
+            for q in quiz.questions
+        ]
+    }
+    return j_ok(data)
+
+
 
 # ---------- Session (game flow) ----------
 @library_bp.post("/session/create")
 def session_create():
-    """
-    JSON: { "player_name": "neomi", "quiz_id": 12 }
-    """
     b = request.get_json(silent=True) or {}
     player = norm(b.get("player_name")) or "guest"
     quiz_id = b.get("quiz_id")
@@ -164,28 +199,38 @@ def session_create():
     if not quiz:
         return j_err("not_found", "quiz not found", 404)
 
+    # fetch questions for count
+    questions = quiz.questions
+    if not questions:
+        return j_err("empty_quiz", "quiz has no questions", 400)
+
     s = QuizSession(
         quiz_id=quiz.id,
         player_name=player,
         score=0,
-        total_questions=len(quiz.question_ids),
+        total_questions=len(questions),
         current_index=0
     )
-    db.session.add(s); db.session.commit()
+    db.session.add(s)
+    db.session.commit()
     return j_ok({"session_id": s.id})
+
 
 @library_bp.get("/session/<int:sid>/current")
 def session_current(sid: int):
     s = QuizSession.query.get(sid)
-    if not s: return j_err("not_found", "session not found", 404)
-    quiz = Quiz.query.get(s.quiz_id)
+    if not s:
+        return j_err("not_found", "session not found", 404)
 
-    if s.current_index >= len(quiz.question_ids):
+    quiz = Quiz.query.get(s.quiz_id)
+    questions = quiz.questions
+
+    if s.current_index >= len(questions):
         return j_ok({"finished": True, "score": s.score})
 
-    qid = quiz.question_ids[s.current_index]
-    q = TriviaQuestion.query.get(qid)
-    options = list(q.answers); random.shuffle(options)
+    q = questions[s.current_index]
+    options = list(q.answers)
+    random.shuffle(options)
 
     return j_ok({
         "finished": False,
@@ -198,23 +243,21 @@ def session_current(sid: int):
 
 @library_bp.post("/session/<int:sid>/answer")
 def session_answer(sid: int):
-    """
-    JSON: { "answer": "Paris", "client_ms": 1800 }
-    Scoring: correct → max(100, 1000 - client_ms/2); wrong → 0
-    """
     b = request.get_json(silent=True) or {}
     answer = norm(b.get("answer"))
     client_ms = int(b.get("client_ms") or 0)
 
     s = QuizSession.query.get(sid)
-    if not s: return j_err("not_found", "session not found", 404)
-    quiz = Quiz.query.get(s.quiz_id)
+    if not s:
+        return j_err("not_found", "session not found", 404)
 
-    if s.current_index >= len(quiz.question_ids):
+    quiz = Quiz.query.get(s.quiz_id)
+    questions = quiz.questions
+
+    if s.current_index >= len(questions):
         return j_ok({"finished": True, "score": s.score})
 
-    qid = quiz.question_ids[s.current_index]
-    q = TriviaQuestion.query.get(qid)
+    q = questions[s.current_index]
 
     is_correct = (answer.lower() == q.answers[0].strip().lower())
     awarded = 0
@@ -232,7 +275,7 @@ def session_answer(sid: int):
     db.session.add(log)
 
     s.current_index += 1
-    finished = s.current_index >= len(quiz.question_ids)
+    finished = s.current_index >= len(questions)
 
     if finished:
         lb = LeaderboardEntry(quiz_id=quiz.id, player_name=s.player_name, score=s.score)
@@ -243,8 +286,10 @@ def session_answer(sid: int):
     if finished:
         return j_ok({"finished": True, "score": s.score})
 
-    next_q = TriviaQuestion.query.get(quiz.question_ids[s.current_index])
-    opts = list(next_q.answers); random.shuffle(opts)
+    next_q = questions[s.current_index]
+    opts = list(next_q.answers)
+    random.shuffle(opts)
+
     return j_ok({
         "finished": False,
         "score": s.score,
@@ -256,6 +301,7 @@ def session_answer(sid: int):
             "total": s.total_questions
         }
     })
+
 
 # ---------- Leaderboard ----------
 @library_bp.get("/leaderboard")
