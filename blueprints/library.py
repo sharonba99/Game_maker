@@ -144,6 +144,77 @@ def add_question():
     db.session.commit()
     return j_ok({"id": row.id}, 201)
 
+@library_bp.post("/import")
+def bulk_import():
+    """
+    JSON format:
+    {
+      "quizzes": [
+        {
+          "title": "Quiz Title",
+          "topic": "Topic",
+          "difficulty": "easy",
+          "questions": [
+            {
+              "question": "text",
+              "difficulty": "easy",
+              "answers": ["correct", "wrong1", "wrong2", "wrong3"]
+            }
+          ]
+        }
+      ]
+    }
+    """
+    body = request.get_json(silent=True) or {}
+    quizzes = body.get("quizzes", [])
+
+    if not quizzes or not isinstance(quizzes, list):
+        return j_err("bad_request", "quizzes must be a non-empty array", 400)
+
+    created = []
+    try:
+        for qz in quizzes:
+            title = norm(qz.get("title"))
+            topic = norm(qz.get("topic"))
+            difficulty = norm(qz.get("difficulty")) or None
+            questions = qz.get("questions", [])
+
+            if not title or not topic:
+                return j_err("bad_request", "title & topic required for each quiz", 400)
+
+            quiz = Quiz(title=title, topic=topic, difficulty=difficulty)
+            db.session.add(quiz)
+            db.session.flush()  # so quiz.id is available before commit
+
+            for q in questions:
+                question_text = norm(q.get("question"))
+                q_diff = norm(q.get("difficulty")) or None
+                answers = q.get("answers")
+
+                ok, err = ensure_answers(answers)
+                if not question_text or not ok:
+                    return j_err("bad_request", err or "invalid question/answers", 400)
+
+                tq = TriviaQuestion(
+                    question=question_text,
+                    topic=topic,
+                    difficulty=q_diff,
+                    answers=answers,
+                    quiz_id=quiz.id
+                )
+                db.session.add(tq)
+
+            created.append({"quiz_id": quiz.id, "title": quiz.title, "count": len(questions)})
+
+        db.session.commit()
+        return j_ok({"created": created}, 201)
+
+    except Exception as e:
+        db.session.rollback()
+        return j_err("server_error", str(e), 500)
+
+
+
 # ---------- Game session ----------
 @library_bp.post("/session/create")
 def session_create():

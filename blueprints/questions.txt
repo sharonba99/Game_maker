@@ -1,0 +1,56 @@
+{
+  "quizzes": [
+    {
+      "title": "Math - Easy",
+      "topic": "Math",
+      "difficulty": "easy",
+      "questions": [
+        { "question": "2 + 2 = ?", "difficulty": "easy", "answers": ["4", "3", "5", "22"] },
+        { "question": "5 × 3 = ?", "difficulty": "easy", "answers": ["15", "10", "12", "18"] },
+        { "question": "10 ÷ 2 = ?", "difficulty": "easy", "answers": ["5", "2", "10", "4"] },
+        { "question": "Square root of 81?", "difficulty": "easy", "answers": ["9", "8", "7", "6"] },
+        { "question": "7 − 4 = ?", "difficulty": "easy", "answers": ["3", "2", "4", "5"] },
+        { "question": "12 + 8 = ?", "difficulty": "easy", "answers": ["20", "18", "22", "24"] }
+      ]
+    },
+    {
+      "title": "History - Medium",
+      "topic": "History",
+      "difficulty": "medium",
+      "questions": [
+        { "question": "Who was the first President of the USA?", "difficulty": "medium", "answers": ["George Washington", "Abraham Lincoln", "John Adams", "Thomas Jefferson"] },
+        { "question": "In what year did World War II end?", "difficulty": "medium", "answers": ["1945", "1939", "1940", "1950"] },
+        { "question": "Which empire built the Colosseum?", "difficulty": "medium", "answers": ["Roman Empire", "Greek Empire", "Ottoman Empire", "Byzantine Empire"] },
+        { "question": "Who was known as the Maid of Orléans?", "difficulty": "medium", "answers": ["Joan of Arc", "Marie Curie", "Queen Elizabeth I", "Catherine the Great"] },
+        { "question": "Which country was led by Pharaohs?", "difficulty": "medium", "answers": ["Egypt", "Persia", "Rome", "Greece"] },
+        { "question": "The Great Wall is in which country?", "difficulty": "medium", "answers": ["China", "India", "Japan", "Mongolia"] }
+      ]
+    },
+    {
+      "title": "Science - Easy",
+      "topic": "Science",
+      "difficulty": "easy",
+      "questions": [
+        { "question": "What planet is known as the Red Planet?", "difficulty": "easy", "answers": ["Mars", "Venus", "Jupiter", "Mercury"] },
+        { "question": "What gas do humans need to breathe?", "difficulty": "easy", "answers": ["Oxygen", "Carbon Dioxide", "Hydrogen", "Nitrogen"] },
+        { "question": "What is H2O commonly known as?", "difficulty": "easy", "answers": ["Water", "Hydrogen", "Salt", "Ozone"] },
+        { "question": "Which organ pumps blood in humans?", "difficulty": "easy", "answers": ["Heart", "Lungs", "Kidney", "Liver"] },
+        { "question": "What force pulls objects to Earth?", "difficulty": "easy", "answers": ["Gravity", "Magnetism", "Friction", "Electricity"] },
+        { "question": "The Earth revolves around the ____?", "difficulty": "easy", "answers": ["Sun", "Moon", "Mars", "Milky Way"] }
+      ]
+    },
+    {
+      "title": "Geography - Medium",
+      "topic": "Geography",
+      "difficulty": "medium",
+      "questions": [
+        { "question": "What is the capital of France?", "difficulty": "medium", "answers": ["Paris", "Rome", "Berlin", "Madrid"] },
+        { "question": "Which is the largest ocean?", "difficulty": "medium", "answers": ["Pacific Ocean", "Atlantic Ocean", "Indian Ocean", "Arctic Ocean"] },
+        { "question": "Mount Everest is in which mountain range?", "difficulty": "medium", "answers": ["Himalayas", "Andes", "Alps", "Rockies"] },
+        { "question": "Which desert is the largest in the world?", "difficulty": "medium", "answers": ["Sahara", "Gobi", "Kalahari", "Atacama"] },
+        { "question": "Which river flows through Egypt?", "difficulty": "medium", "answers": ["Nile", "Amazon", "Yangtze", "Mississippi"] },
+        { "question": "Which continent is Australia in?", "difficulty": "medium", "answers": ["Australia", "Asia", "Africa", "Europe"] }
+      ]
+    }
+  ]
+}

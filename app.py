@@ -63,6 +63,7 @@ if __name__ == "__main__":
             QuizAnswerLog,
             LeaderboardEntry,
         )
+        db.drop_all()
         db.create_all()
 
     port = int(os.getenv("PORT", "5001"))
