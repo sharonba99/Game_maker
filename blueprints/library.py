@@ -318,11 +318,6 @@ def session_answer(sid: int):
     s.current_index += 1
     finished = s.current_index >= len(questions)
 
-    # אם סיימנו – מכניסים ללידרבורד (אין duration_ms גם פה)
-       # התקדמות לשאלה הבאה
-    s.current_index += 1
-    finished = s.current_index >= len(questions)
-
     if finished:
         # נוודא שה-QuizAnswerLog של השאלה הנוכחית נמצא בבאפר לפני הסכימה
         db.session.flush()
