@@ -1,322 +1,385 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, type ReactNode } from "react";
+import { Routes, Route, Navigate, Link, useNavigate } from "react-router-dom";
 
-type TOk<T> = { ok: true; data: T };
-type TErr = { ok: false; error: { code: string; message: string } };
-type J<T> = TOk<T> | TErr;
+/** ---------- small fetch helper ---------- */
+type Ok<T> = { ok: true; data: T };
+type Err = { ok: false; error: { code: string; message: string } };
+type J<T> = Ok<T> | Err;
 
 function useApi(baseUrl: string) {
-  async function get<T>(path: string): Promise<J<T>> {
-    const r = await fetch(`${baseUrl}${path}`);
+  async function get<T>(p: string): Promise<J<T>> {
+    const r = await fetch(`${baseUrl}${p}`);
     return r.json();
   }
-  async function post<T>(path: string, body: any): Promise<J<T>> {
-    const r = await fetch(`${baseUrl}${path}`, {
+  async function post<T>(p: string, body: any): Promise<J<T>> {
+    const r = await fetch(`${baseUrl}${p}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     return r.json();
   }
-  async function put<T>(path: string, body: any): Promise<J<T>> {
-    const r = await fetch(`${baseUrl}${path}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return r.json();
-  }
-  return { get, post, put };
+  return { get, post };
 }
 
-type QuizRow = { id: number; title: string; topic: string; difficulty?: string; count: number };
-type CurrentQ = { finished: boolean; question_id?: number; question?: string; options?: string[]; index?: number; total?: number };
-type LeaderTop = { player_name: string; score: number }[];
+/** ---------- auth guard ---------- */
+function RequireAuth({ children }: { children: ReactNode }) {
+  const hasUser = !!JSON.parse(localStorage.getItem("auth") || "null")?.username;
+  if (!hasUser) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
-export default function App() {
-  const [baseUrl, setBaseUrl] = useState("http://localhost:5001");
+/** ---------- Auth page (Login + Signup toggle) ---------- */
+function AuthPage({ baseUrl }: { baseUrl: string }) {
   const api = useApi(baseUrl);
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [username, setU] = useState("");
+  const [password, setP] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const nav = useNavigate();
 
-  // auth-less for now
-  const [player, setPlayer] = useState("neomi");
+  async function doLogin() {
+    setErr(null); setMsg(null);
+    const res = await api.post<{ user_id: number; username: string }>("/users/login", { username, password });
+    if (!res.ok) { setErr(res.error.message); return; }
+    localStorage.setItem("auth", JSON.stringify(res.data)); // {user_id, username}
+    nav("/play");
+  }
 
-  // views
-  type View = "lobby" | "play" | "result" | "leaderboard" | "manage";
-  const [view, setView] = useState<View>("lobby");
+  async function doSignup() {
+    setErr(null); setMsg(null);
+    const res = await api.post<{ id: number; username: string }>("/users/signup", { username, password });
+    if (!res.ok) { setErr(res.error.message); return; }
+    setMsg("Account created. Logging you in...");
+    await doLogin();
+  }
 
-  // lobby state
+  return (
+    <div style={{ padding: 16, maxWidth: 420, margin: "0 auto" }}>
+      <h2>{mode === "login" ? "Login" : "Signup"}</h2>
+
+      {err && <div style={{ color: "crimson", marginBottom: 8 }}>Error: {err}</div>}
+      {msg && <div style={{ color: "green", marginBottom: 8 }}>{msg}</div>}
+
+      <div>Username</div>
+      <input value={username} onChange={(e) => setU(e.target.value)} />
+      <div style={{ marginTop: 8 }}>Password</div>
+      <input type="password" value={password} onChange={(e) => setP(e.target.value)} />
+
+      <div style={{ marginTop: 12 }}>
+        {mode === "login" ? (
+          <button onClick={doLogin}>Login</button>
+        ) : (
+          <button onClick={doSignup}>Create account</button>
+        )}
+      </div>
+
+      <div style={{ marginTop: 12, fontSize: 13 }}>
+        {mode === "login" ? (
+          <>
+            אין לך חשבון?{" "}
+            <button onClick={() => { setMode("signup"); setErr(null); setMsg(null); }} style={{ textDecoration: "underline" }}>
+              Signup
+            </button>
+          </>
+        ) : (
+          <>
+            כבר רשומה?{" "}
+            <button onClick={() => { setMode("login"); setErr(null); setMsg(null); }} style={{ textDecoration: "underline" }}>
+              Login
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** ---------- navbar ---------- */
+function Navbar({ onLogout }: { onLogout: () => void }) {
+  const auth = JSON.parse(localStorage.getItem("auth") || "null");
+  return (
+    <nav style={{ display: "flex", gap: 12, padding: 8, borderBottom: "1px solid #ddd" }}>
+      <Link to="/play">Play</Link>
+      <Link to="/createquiz">CreateQuiz</Link>
+      <div style={{ marginLeft: "auto" }}>
+        {auth?.username ? (
+          <>
+            <span style={{ marginRight: 8 }}>Hello, {auth.username}</span>
+            <button onClick={onLogout}>Logout</button>
+          </>
+        ) : (
+          <Link to="/login">Login / Signup</Link>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+/** ---------- types for leaderboard ---------- */
+type LeaderRow = { player_name: string; score: number; /* duration_ms?: number */ };
+
+/** ---------- play page ---------- */
+function Play({ baseUrl }: { baseUrl: string }) {
+  const api = useApi(baseUrl);
   const [topics, setTopics] = useState<string[]>([]);
-  const [topic, setTopic] = useState<string>("");
-  const [quizzes, setQuizzes] = useState<QuizRow[]>([]);
+  const [topic, setTopic] = useState("");
+  const [quizzes, setQuizzes] = useState<{ id: number; title: string; count: number }[]>([]);
   const [quizId, setQuizId] = useState<number | null>(null);
 
-  // game
   const [sid, setSid] = useState<number | null>(null);
-  const [current, setCurrent] = useState<CurrentQ | null>(null);
   const [score, setScore] = useState(0);
-  const startMsRef = useRef<number>(0);
+  const [current, setCurrent] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [board, setBoard] = useState<{ player_name: string; score: number }[]>([]);
+  const [answering, setAnswering] = useState(false);
+  const startMsRef = useRef(0);
 
-  // leaderboard
-  const [board, setBoard] = useState<LeaderTop>([]);
+  const playerName = JSON.parse(localStorage.getItem("auth") || "null")?.username || "guest";
 
-  // manage (add question / create quiz)
-  const [qTopic, setQTopic] = useState("");
-  const [qDiff, setQDiff] = useState("");
-  const [qText, setQText] = useState("");
-  const [a1, setA1] = useState("");
-  const [a2, setA2] = useState("");
-  const [a3, setA3] = useState("");
-  const [a4, setA4] = useState("");
-  const [id, setId] = useState("");
-
-  const [mTitle, setMTitle] = useState("");
-  const [mTopic, setMTopic] = useState("");
-  const [mDiff, setMDiff] = useState("");
-  const [mCount, setMCount] = useState(5);
-
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-
-  // load topics initially
   useEffect(() => {
     (async () => {
-      const res = await api.get<string[]>("/library/topics");
-      if (res.ok) setTopics(res.data);
+      const t = await api.get<string[]>("/library/topics");
+      if (t.ok) setTopics(t.data);
     })();
-  }, [baseUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadQuizzes(t: string) {
     setTopic(t);
     setQuizId(null);
-    const res = await api.get<QuizRow[]>(`/library/quizzes?topic=${encodeURIComponent(t)}`);
+    setBoard([]);
+    const res = await api.get<any>(`/library/quizzes?topic=${encodeURIComponent(t)}`);
     if (res.ok) setQuizzes(res.data);
   }
 
-  async function startQuiz() {
-    if (!quizId) { setError("Choose quiz"); return; }
-    setError(null);
-    setInfo(null);
-    const res = await api.post<{ session_id: number }>(`/library/session/create`, { player_name: player, quiz_id: quizId });
-    if (!res.ok) { setError(res.error.message); return; }
-    setSid(res.data.session_id);
-    await loadCurrent(res.data.session_id);
-    setScore(0);
-    setView("play");
+  async function start() {
+    if (!quizId) return;
+    setErr(null);
+    setBoard([]);
+    try {
+      const res = await api.post<{ session_id: number }>(`/library/session/create`, {
+        quiz_id: quizId,
+        player_name: playerName,
+      });
+      console.log("start/session_create:", res);
+      if (!res.ok) { setErr(res.error.message); return; }
+      setSid(res.data.session_id);
+      await loadCurrent(res.data.session_id);
+      setScore(0);
+    } catch (e: any) {
+      setErr("Network error starting session");
+      console.error(e);
+    }
   }
 
   async function loadCurrent(sidX: number) {
-    const res = await api.get<CurrentQ>(`/library/session/${sidX}/current`);
-    if (!res.ok) { setError(res.error.message); return; }
-    setCurrent(res.data);
-    if (!res.data.finished) {
-      startMsRef.current = performance.now(); // start timer
-    } else {
-      setView("result");
+    try {
+      const res = await api.get<any>(`/library/session/${sidX}/current`);
+      console.log("current:", res);
+      if (!res.ok) { setErr(res.error.message); return; }
+      setCurrent(res.data);
+      if (!res.data.finished) startMsRef.current = performance.now();
+      if (res.data.finished && quizId) {
+        await loadBoard(quizId);
+      }
+    } catch (e: any) {
+      setErr("Network error loading question");
+      console.error(e);
     }
   }
 
-  async function submitAnswer(ans: string) {
-    if (!sid) return;
-    const elapsed = Math.floor(performance.now() - startMsRef.current);
-    const res = await api.post<any>(`/library/session/${sid}/answer`, { answer: ans, client_ms: elapsed });
-    if (!res.ok) { setError(res.error.message); return; }
-    if (typeof res.data.score === "number") setScore(res.data.score);
-    if (res.data.finished) {
-      setView("result");
-    } else if (res.data.next) {
-      setCurrent(res.data.next);
-      startMsRef.current = performance.now();
-    } else {
-      await loadCurrent(sid);
+  async function answer(opt: string) {
+    if (!sid || answering) return;
+    setAnswering(true);
+    setErr(null);
+    try {
+      const ms = Math.floor(performance.now() - startMsRef.current);
+      const res = await api.post<any>(`/library/session/${sid}/answer`, { answer: opt, client_ms: ms });
+      console.log("answer:", res);
+      if (!res.ok) { setErr(res.error.message); setAnswering(false); return; }
+      if (typeof res.data.score === "number") setScore(res.data.score);
+
+      if (res.data.finished) {
+        setCurrent({ finished: true });
+        if (quizId) await loadBoard(quizId);
+      } else if (res.data.next) {
+        setCurrent(res.data.next);
+        startMsRef.current = performance.now();
+      } else {
+        await loadCurrent(sid);
+      }
+    } catch (e: any) {
+      setErr("Network error submitting answer");
+      console.error(e);
+    } finally {
+      setAnswering(false);
     }
   }
 
-  async function loadLeaderboardForQuiz(qid: number) {
-    const res = await api.get<{ top: LeaderTop }>(`/library/leaderboard?quiz_id=${qid}`);
-    if (res.ok) setBoard(res.data.top);
+  async function loadBoard(qid: number) {
+    try {
+      const r = await api.get<{ top: { player_name: string; score: number }[] }>(`/library/leaderboard?quiz_id=${qid}`);
+      console.log("board:", r);
+      if (r.ok) setBoard(r.data.top);
+    } catch (e) {
+      console.error(e);
+    }
   }
-
-  // manage actions
-  async function addQuestion() {
-    setError(null);
-    setInfo(null);
-    const answers = [a1, a2, a3, a4];
-    const res = await api.post<{ id: number }>(`/library/questions`, {
-      question: qText, topic: qTopic, difficulty: qDiff, answers, quiz_id: id
-    });
-    if (!res.ok) { setError(res.error.message); return; }
-    // refresh topics list
-    const t = await api.get<string[]>("/library/topics");
-    if (t.ok) setTopics(t.data);
-    setQText(""); setA1(""); setA2(""); setA3(""); setA4("");
-    setInfo("New question was created successfully");
-  }
-
-  async function createQuiz() {
-    setError(null);
-    setInfo(null);
-    const res = await api.post<{ id: number }>(`/library/quizzes`, {
-      title: mTitle, topic: mTopic, difficulty: mDiff, count: mCount
-    });
-    if (!res.ok) { setError(res.error.message); return; }
-    if (topic === mTopic) await loadQuizzes(topic);
-    setMTitle(""); setMTopic(""); setMDiff(""); setMCount(5);
-    setInfo("New quiz was created successfully. Quiz ID is " + res.data.id.toString());
-  }
-
-  // UI bits
-  const header = (
-    <header style={{ textAlign: "center", padding: "16px 0" }}>
-      <h1>Trivia Creator – Mini Quiz</h1>
-      <p>Kahoot-style flow: Login → Start → Answer → Result → Leaderboard</p>
-    </header>
-  );
 
   return (
-    <div style={{ padding: 12, fontFamily: "system-ui, Arial" }}>
-      {/* base config */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <label>Base URL</label>
-        <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} style={{ width: 260 }} />
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button onClick={() => setView("lobby")}>Lobby</button>
-          <button onClick={() => setView("manage")}>Manage</button>
-          {view !== "lobby" && <button onClick={() => { setSid(null); setView("lobby"); }}>Logout</button>}
-        </div>
-      </div>
+    <div style={{ padding: 16 }}>
+      <h2>Play</h2>
+      <div style={{ marginBottom: 6 }}>Playing as: <b>{playerName}</b></div>
+      {err && <div style={{ color: "crimson" }}>Error: {err}</div>}
 
-      {header}
+      <div>Topic</div>
+      <select value={topic} onChange={(e) => loadQuizzes(e.target.value)}>
+        <option value="">-- choose topic --</option>
+        {topics.map((t) => <option key={t} value={t}>{t}</option>)}
+      </select>
 
-      {error && (
-        <div style={{ color: "#b00", marginBottom: 8 }}>Error: {error}</div>
-      )}
-
-      {info && (
-        <div style={{ color: "rgba(0, 187, 34, 1)", marginBottom: 8 }}>Info: {info}</div>
-      )}
-
-      {/* Lobby */}
-      {view === "lobby" && (
-        <div style={{ maxWidth: 800, margin: "0 auto" }}>
-          <h2>Start a Session</h2>
-          <div>Player name</div>
-          <input value={player} onChange={e=>setPlayer(e.target.value)} />
-          <div style={{ marginTop: 8 }}>Topic</div>
-          <select value={topic} onChange={e => loadQuizzes(e.target.value)}>
-            <option value="">-- choose topic --</option>
-            {topics.map(t => <option key={t} value={t}>{t}</option>)}
+      {topic && (
+        <>
+          <div style={{ marginTop: 8 }}>Quiz</div>
+          <select value={quizId ?? ""} onChange={(e) => setQuizId(+e.target.value || null)}>
+            <option value="">-- choose quiz --</option>
+            {quizzes.map((q) => (
+              <option key={q.id} value={q.id}>{q.title} ({q.count} Qs)</option>
+            ))}
           </select>
-
-          {topic && (
-            <>
-              <div style={{ marginTop: 8 }}>Quizzes in {topic}</div>
-              <select value={quizId ?? ""} onChange={e => setQuizId(+e.target.value || null)}>
-                <option value="">-- choose quiz --</option>
-                {quizzes.map(q => (
-                  <option key={q.id} value={q.id}>{q.title} ({q.count} Qs)</option>
-                ))}
-              </select>
-            </>
-          )}
-
-          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-            <button onClick={startQuiz}>Start</button>
-            {quizId && (
-              <button onClick={async () => { await loadLeaderboardForQuiz(quizId); setView("leaderboard"); }}>View Leaderboard</button>
-            )}
-          </div>
-        </div>
+          <div><button type="button" style={{ marginTop: 8 }} onClick={start}>Start</button></div>
+        </>
       )}
 
-      {/* Play */}
-      {view === "play" && current && !current.finished && (
-        <div style={{ maxWidth: 800, margin: "0 auto" }}>
-          <h2>Question { (current.index ?? 0) + 1 } / {current.total}</h2>
-          <div style={{ marginBottom: 8 }}>Score: {score}</div>
-          <div style={{ margin: "12px 0", fontSize: 18 }}>{current.question}</div>
+      {current && !current.finished && (
+        <div style={{ marginTop: 16 }}>
+          <div>Score: {score}</div>
+          <div style={{ fontSize: 18, margin: "8px 0" }}>{current.question}</div>
           <div style={{ display: "grid", gap: 8 }}>
-            {current.options?.map((opt, i) => (
-              <button key={i} onClick={() => submitAnswer(opt)}>{opt}</button>
+            {current.options?.map((o: string, i: number) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => answer(o)}
+                disabled={answering}
+              >
+                {answering ? "…" : o}
+              </button>
             ))}
           </div>
+          <div style={{ marginTop: 8 }}>Q {(current.index ?? 0) + 1} / {current.total}</div>
         </div>
       )}
 
-      {/* Result */}
-      {view === "result" && (
-        <div style={{ maxWidth: 800, margin: "0 auto" }}>
-          <h2>Result</h2>
-          <p>Final score: <b>{score}</b></p>
-          {quizId && (
-            <button onClick={async () => { await loadLeaderboardForQuiz(quizId); setView("leaderboard"); }}>
-              Leaderboard
-            </button>
-          )}
-          <button style={{ marginLeft: 8 }} onClick={() => setView("lobby")}>Back to Lobby</button>
-        </div>
-      )}
+      {current?.finished && (
+        <div style={{ marginTop: 16 }}>
+          <h3>Finished!</h3>
+          <div>Final score: {score}</div>
 
-      {/* Leaderboard */}
-      {view === "leaderboard" && (
-        <div style={{ maxWidth: 600, margin: "0 auto" }}>
-          <h2>Leaderboard (Top 10)</h2>
-          {board.length === 0 ? (
-            <div>No scores yet</div>
-          ) : (
-            <div style={{ display: "grid", gap: 6 }}>
-              {board.map((r, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", border: "1px solid #ddd", padding: "6px 10px" }}>
-                  <div>{i + 1}. {r.player_name}</div>
-                  <div>{r.score}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{ marginTop: 12 }}>
-            <button onClick={() => setView("lobby")}>Back</button>
+          {/* Leaderboard */}
+          <div style={{ marginTop: 16 }}>
+            <h3>Top 10</h3>
+            {board.length === 0 ? (
+              <div>No scores yet</div>
+            ) : (
+              <div style={{ display: "grid", gap: 6, maxWidth: 520 }}>
+                {board.map((r, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", border: "1px solid #ddd", padding: "6px 10px", borderRadius: 8 }}>
+                    <div>{i + 1}. {r.player_name}</div>
+                    <div>{r.score}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
-
-      {/* Manage */}
-      {view === "manage" && (
-        <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gap: 24 }}>
-          <section style={{ border: "1px solid #ddd", padding: 12 }}>
-            <h3>Add Question (answers[0] is correct)</h3>
-            <div>Topic</div>
-            <input value={qTopic} onChange={e=>setQTopic(e.target.value)} />
-            <div>Difficulty</div>
-            <input value={qDiff} onChange={e=>setQDiff(e.target.value)} placeholder="easy / medium / hard" />
-            <div>Question</div>
-            <input value={qText} onChange={e=>setQText(e.target.value)} />
-            <div>Answers (first is correct)</div>
-            <input placeholder="correct" value={a1} onChange={e=>setA1(e.target.value)} />
-            <input placeholder="wrong 1" value={a2} onChange={e=>setA2(e.target.value)} />
-            <input placeholder="wrong 2" value={a3} onChange={e=>setA3(e.target.value)} />
-            <input placeholder="wrong 3" value={a4} onChange={e=>setA4(e.target.value)} />
-            <div>Quiz ID</div>
-            <input value={id} onChange={e=>setId(e.target.value)} />
-            <div style={{ marginTop: 8 }}>
-              <button onClick={addQuestion}>Add Question</button>
-            </div>
-          </section>
-
-          <section style={{ border: "1px solid #ddd", padding: 12 }}>
-            <h3>Create Quiz (by topic)</h3>
-            <div>Title</div>
-            <input value={mTitle} onChange={e=>setMTitle(e.target.value)} />
-            <div>Topic</div>
-            <input value={mTopic} onChange={e=>setMTopic(e.target.value)} />
-            <div>Difficulty (optional)</div>
-            <input value={mDiff} onChange={e=>setMDiff(e.target.value)} placeholder="easy / medium / hard" />
-            <div>Count (random questions from topic)</div>
-            <input type="number" value={mCount} onChange={e=>setMCount(parseInt(e.target.value || "5", 10))} />
-            <div style={{ marginTop: 8 }}>
-              <button onClick={createQuiz}>Create</button>
-            </div>
-          </section>
         </div>
       )}
     </div>
   );
 }
 
+/** ---------- create quiz page ---------- */
+function CreateQuiz({ baseUrl }: { baseUrl: string }) {
+  const api = useApi(baseUrl);
+  const [title, setTitle] = useState("");
+  const [topic, setTopic] = useState("");
+  const [diff, setDiff] = useState("");
+  const [quizId, setQuizId] = useState<number | null>(null);
+
+  // question form
+  const [q, setQ] = useState("");
+  const [a1, setA1] = useState("");
+  const [a2, setA2] = useState("");
+  const [a3, setA3] = useState("");
+  const [a4, setA4] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function create() {
+    setErr(null); setMsg(null);
+    const res = await api.post<{ id: number }>(`/library/quizzes`, { title, topic, difficulty: diff });
+    if (!res.ok) { setErr(res.error.message); return; }
+    setQuizId(res.data.id);
+    setMsg("Quiz created: id " + res.data.id);
+  }
+
+  async function addQuestion() {
+    if (!quizId) { setErr("Create quiz first"); return; }
+    setErr(null); setMsg(null);
+    const res = await api.post<{ id: number }>(`/library/questions`, {
+      quiz_id: quizId, question: q, difficulty: diff, answers: [a1, a2, a3, a4]
+    });
+    if (!res.ok) { setErr(res.error.message); return; }
+    setMsg("Question added: id " + res.data.id);
+    setQ(""); setA1(""); setA2(""); setA3(""); setA4("");
+  }
+
+  return (
+    <div style={{ padding: 16 }}>
+      <h2>Create Quiz & Questions</h2>
+      {err && <div style={{ color: "crimson" }}>{err}</div>}
+      {msg && <div style={{ color: "green" }}>{msg}</div>}
+
+      <h3>New Quiz</h3>
+      <div>Title</div><input value={title} onChange={(e) => setTitle(e.target.value)} />
+      <div>Topic</div><input value={topic} onChange={(e) => setTopic(e.target.value)} />
+      <div>Difficulty</div><input value={diff} onChange={(e) => setDiff(e.target.value)} placeholder="easy/medium/hard" />
+      <div><button style={{ marginTop: 8 }} onClick={create}>Create quiz</button></div>
+
+      <h3 style={{ marginTop: 16 }}>Add Question (answers[0] is correct)</h3>
+      <div>Question</div><input value={q} onChange={(e) => setQ(e.target.value)} />
+      <div>Answers</div>
+      <input placeholder="correct" value={a1} onChange={(e) => setA1(e.target.value)} />
+      <input placeholder="wrong 1" value={a2} onChange={(e) => setA2(e.target.value)} />
+      <input placeholder="wrong 2" value={a3} onChange={(e) => setA3(e.target.value)} />
+      <input placeholder="wrong 3" value={a4} onChange={(e) => setA4(e.target.value)} />
+      <div><button style={{ marginTop: 8 }} onClick={addQuestion}>Add question</button></div>
+    </div>
+  );
+}
+
+/** ---------- app root ---------- */
+export default function App() {
+  const [baseUrl, setBaseUrl] = useState("http://localhost:5001");
+  const nav = useNavigate();
+  function logout() {
+    localStorage.removeItem("auth");
+    nav("/login");
+  }
+  return (
+    <div>
+      <Navbar onLogout={logout} />
+      <div style={{ padding: 8 }}>
+        Base URL: <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={{ width: 260 }} />
+      </div>
+      <Routes>
+        <Route path="/login" element={<AuthPage baseUrl={baseUrl} />} />
+        <Route path="/play" element={<RequireAuth><Play baseUrl={baseUrl} /></RequireAuth>} />
+        <Route path="/createquiz" element={<RequireAuth><CreateQuiz baseUrl={baseUrl} /></RequireAuth>} />
+        <Route path="*" element={<Navigate to="/play" replace />} />
+      </Routes>
+    </div>
+  );
+}
