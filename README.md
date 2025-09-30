@@ -101,6 +101,14 @@ Scenario D — Teammate just cloned the repo
 pip install -r requirements.txt
 flask db upgrade
 python app.py
+
+### Creating the Frontend client:
+cd frontend
+npm install
+npm run dev
+
+
+
 API (Quick Summary)
 /users
 GET /users/ — list users (id, username)
@@ -154,7 +162,6 @@ Run migrations: flask db migrate -m "init schema" → flask db upgrade.
 Wrong DB?
 Hit GET / (health) to see which DB URL was loaded (default is instance/users.db if no DATABASE_URL).
 
-Happy hacking! 🎉
 
 
 
