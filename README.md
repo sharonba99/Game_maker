@@ -47,7 +47,6 @@ Create `.env` at the project root (same folder as `app.py`):
 FLASK_APP=app:create_app
 FLASK_DEBUG=1
 FLASK_SECRET_KEY=dev-secret-change-me
-JWT_SECRET_KEY=dev-jwt-change-me
 CORS_ORIGINS=http://localhost:5173, 
 http://localhost:3000
 PORT=5001
