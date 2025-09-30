@@ -85,7 +85,7 @@ def create_quiz():
     {
       "title": "Math — Easy Set A",
       "topic": "Math",
-      "difficulty": "easy"   # אופציונלי
+      "difficulty": "easy"
     }
     """
     b = request.get_json(silent=True) or {}
@@ -108,8 +108,8 @@ def add_question():
     {
       "quiz_id": 1,
       "question": "2+2?",
-      "difficulty": "easy",    # אופציונלי
-      "answers": ["4","5","3","22"]  # הראשונה נכונה
+      "difficulty": "easy",
+      "answers": ["4","5","3","22"]
     }
     """
     b = request.get_json(silent=True) or {}
