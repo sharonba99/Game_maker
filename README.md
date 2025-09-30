@@ -16,23 +16,26 @@ A small Flask API for creating and playing trivia quizzes: user auth, quiz libra
 - **SQLite** for local dev (or `DATABASE_URL` for Postgres, etc.)
 
 ## Project Structure
+```text
 .
-├─ app.py # App factory, CORS, SQLAlchemy, Migrate, blueprint registration
-├─ models.py # SQLAlchemy models (User, Quiz, TriviaQuestion, QuizSession, QuizAnswerLog, LeaderboardEntry)
+├─ app.py                  # App factory, CORS, SQLAlchemy, Migrate, blueprint registration
+├─ models.py               # SQLAlchemy models (User, Quiz, TriviaQuestion, QuizSession, QuizAnswerLog, LeaderboardEntry)
 ├─ blueprints/
-│ ├─ init.py
-│ ├─ users.py # /users: signup/login/list
-│ └─ library.py # /library: topics, quizzes, import, sessions, leaderboard
+│  ├─ __init__.py
+│  ├─ users.py             # /users: signup/login/list
+│  └─ library.py           # /library: topics, quizzes, import, sessions, leaderboard
 ├─ utils/
-│ └─ db.py # shared SQLAlchemy() instance
+│  └─ db.py                # shared SQLAlchemy() instance
 ├─ instance/
-│ ├─ .gitkeep
-│ └─ users.db # local SQLite (dev)
-├─ frontend/ # frontend app (separate)
-├─ .env # environment variables (see below)
+│  ├─ .gitkeep
+│  └─ users.db             # local SQLite (dev)
+├─ frontend/               # frontend app (separate)
+├─ .env                    # environment variables (see below)
 ├─ .gitignore
 ├─ requirements.txt
 └─ README.md
+
+
 
 ## Prerequisites
 - Python 3.10+ recommended
@@ -45,7 +48,8 @@ FLASK_APP=app:create_app
 FLASK_DEBUG=1
 FLASK_SECRET_KEY=dev-secret-change-me
 JWT_SECRET_KEY=dev-jwt-change-me
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+CORS_ORIGINS=http://localhost:5173, 
+http://localhost:3000
 PORT=5001
 
 Optional: override DB (otherwise defaults to SQLite in instance/users.db)
