@@ -278,11 +278,11 @@ def session_current(sid: int):
 def session_answer(sid: int):
     """
     JSON: { "answer": "Paris", "client_ms": 1800 }
-    ניקוד: תשובה נכונה -> max(100, 1000 - client_ms/2); שגויה -> 0
+    mark corect answer-> max(100, 1000 - client_ms/2); error -> 0
     """
     b = request.get_json(silent=True) or {}
     answer = norm(b.get("answer"))
-    client_ms = int(b.get("client_ms") or 0)  # זה הזמן היחיד שאנחנו שומרים בלוג
+    client_ms = int(b.get("client_ms") or 0)  # this is the only time value we store in the log
 
     s = QuizSession.query.get(sid)
     if not s:
@@ -291,20 +291,20 @@ def session_answer(sid: int):
     quiz = Quiz.query.get(s.quiz_id)
     questions = quiz.questions
 
-    # אם כבר סיימנו
+    # if the game is over
     if s.current_index >= len(questions):
         return j_ok({"finished": True, "score": s.score})
 
-    # השאלה הנוכחית
+    # current question
     q = questions[s.current_index]
 
-    # בדיקת תשובה
+    # check answer
     is_correct = (answer.lower() == q.answers[0].strip().lower())
     awarded = max(100, 1000 - (client_ms // 2)) if is_correct else 0
     if is_correct:
         s.score += awarded
 
-    # לוג תשובה – שימי לב: אין duration_ms במודל, רק client_ms
+    # answer log – note: there is no duration_ms in the model, only client_ms
     log = QuizAnswerLog(
         session_id=s.id,
         question_id=q.id,
@@ -314,15 +314,15 @@ def session_answer(sid: int):
     )
     db.session.add(log)
 
-    # התקדמות לשאלה הבאה
+    # go to the next question
     s.current_index += 1
     finished = s.current_index >= len(questions)
 
     if finished:
-        # נוודא שה-QuizAnswerLog של השאלה הנוכחית נמצא בבאפר לפני הסכימה
+        # ensure the current question's QuizAnswerLog is in the buffer before aggregation
         db.session.flush()
 
-        # סכום כל זמני התשובה (ms) של הסשן הזה
+        # sum of all answer times (ms) for this session
         total_ms = db.session.query(
             func.coalesce(func.sum(QuizAnswerLog.client_ms), 0)
         ).filter(QuizAnswerLog.session_id == s.id).scalar()
@@ -332,7 +332,7 @@ def session_answer(sid: int):
             user_id=getattr(s, "player_user_id", None),
             player_name=s.player_name,
             score=s.score,
-            duration_ms=int(total_ms or 0),  # <<< נשמר בדירוג
+            duration_ms=int(total_ms or 0),  # <<< stored in leaderboard
         )
         db.session.add(lb)
 
@@ -342,7 +342,7 @@ def session_answer(sid: int):
         return j_ok({"finished": True, "score": s.score})
 
 
-    # להכין את השאלה הבאה
+    # prepare the next question
     next_q = questions[s.current_index]
     opts = list(next_q.answers)
     random.shuffle(opts)
