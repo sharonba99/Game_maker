@@ -369,13 +369,14 @@ function Play({ baseUrl }: { baseUrl: string }) {
   );
 }
 
-/** ---------- create quiz page ---------- */
 function CreateQuiz({ baseUrl }: { baseUrl: string }) {
   const api = useApi(baseUrl);
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [diff, setDiff] = useState("");
-  const [quizId, setQuizId] = useState<number | null>(null);
+
+  const [quizzes, setQuizzes] = useState<{ id: number; title: string }[]>([]);
+  const [quizId, setQuizId] = useState<number | "">("");
 
   const [q, setQ] = useState("");
   const [a1, setA1] = useState("");
@@ -385,19 +386,36 @@ function CreateQuiz({ baseUrl }: { baseUrl: string }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // load all quizzes when component mounts
+  useEffect(() => {
+    (async () => {
+      const res = await api.get<any>("/library/quizzes");
+      if (res.ok) setQuizzes(res.data);
+    })();
+  }, []);
+
   async function create() {
     setErr(null); setMsg(null);
-    const res = await api.post<{ id: number }>(`/library/quizzes`, { title, topic, difficulty: diff });
+    const res = await api.post<{ id: number }>("/library/quizzes", {
+      title, topic, difficulty: diff,
+    });
     if (!res.ok) { setErr(res.error.message); return; }
     setQuizId(res.data.id);
     setMsg("Quiz created: id " + res.data.id);
+
+    // refresh list of quizzes
+    const qRes = await api.get<any>("/library/quizzes");
+    if (qRes.ok) setQuizzes(qRes.data);
   }
 
   async function addQuestion() {
-    if (!quizId) { setErr("Create quiz first"); return; }
+    if (!quizId) { setErr("Select quiz first"); return; }
     setErr(null); setMsg(null);
-    const res = await api.post<{ id: number }>(`/library/questions`, {
-      quiz_id: quizId, question: q, difficulty: diff, answers: [a1, a2, a3, a4]
+    const res = await api.post<{ id: number }>("/library/questions", {
+      quiz_id: quizId,
+      question: q,
+      difficulty: diff,
+      answers: [a1, a2, a3, a4],
     });
     if (!res.ok) { setErr(res.error.message); return; }
     setMsg("Question added: id " + res.data.id);
@@ -420,6 +438,24 @@ function CreateQuiz({ baseUrl }: { baseUrl: string }) {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="h6" sx={{ mb: 1 }}>Add Question (answers[0] is correct)</Typography>
+
+
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel>Quiz</InputLabel>
+          <Select
+            value={quizId}
+            label="Quiz"
+            onChange={(e) => setQuizId(Number(e.target.value))}
+          >
+            <MenuItem value=""><em>Choose quiz</em></MenuItem>
+            {quizzes.map((q) => (
+              <MenuItem key={q.id} value={q.id}>
+                {q.title} (id {q.id})
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
         <TextField fullWidth label="Question" value={q} onChange={(e) => setQ(e.target.value)} sx={{ mb: 2 }} />
         <TextField fullWidth label="Correct answer" value={a1} onChange={(e) => setA1(e.target.value)} sx={{ mb: 1 }} />
         <TextField fullWidth label="Wrong 1" value={a2} onChange={(e) => setA2(e.target.value)} sx={{ mb: 1 }} />
