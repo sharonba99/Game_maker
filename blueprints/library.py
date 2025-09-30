@@ -184,7 +184,7 @@ def bulk_import():
 
             quiz = Quiz(title=title, topic=topic, difficulty=difficulty)
             db.session.add(quiz)
-            db.session.flush()  # so quiz.id is available before commit
+            db.session.flush()
 
             for q in questions:
                 question_text = norm(q.get("question"))
@@ -212,6 +212,46 @@ def bulk_import():
     except Exception as e:
         db.session.rollback()
         return j_err("server_error", str(e), 500)
+
+@library_bp.delete("/quizzes/<int:quiz_id>")
+def delete_quiz(quiz_id):
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        return j_err("not_found", f"Quiz with id {quiz_id} not found", 404)
+
+    db.session.delete(quiz)
+    db.session.commit()
+
+    return j_ok({"message": f"Quiz {quiz_id} and all its questions have been deleted"})
+
+@library_bp.delete("/topics/<string:topic>")
+def delete_topic(topic):
+    topic = topic.strip()
+    if not topic:
+        return j_err("bad_request", "Topic is required", 400)
+    quizzes = Quiz.query.filter_by(topic=topic).all()
+    quiz_ids = [q.id for q in quizzes]
+    if quiz_ids:
+        LeaderboardEntry.query.filter(LeaderboardEntry.quiz_id.in_(quiz_ids)).delete(synchronize_session=False)
+
+    Quiz.query.filter_by(topic=topic).delete(synchronize_session=False)
+
+    TriviaQuestion.query.filter_by(topic=topic).delete(synchronize_session=False)
+
+    db.session.commit()
+
+    return j_ok({
+        "message": f"Deleted topic '{topic}' along with {len(quizzes)} quizzes and all related questions."
+    })
+
+@library_bp.delete("/leaderboard")
+def delete_leaderboard():
+    deleted = LeaderboardEntry.query.delete(synchronize_session=False)
+    db.session.commit()
+
+    return j_ok({
+        "message": f"Deleted {deleted} leaderboard entries."
+    })
 
 
 

@@ -16,8 +16,7 @@ class Quiz(db.Model):
     difficulty = db.Column(db.String, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     owner_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-
-    questions = db.relationship("TriviaQuestion", back_populates="quiz", cascade="all, delete-orphan")
+    questions = db.relationship("TriviaQuestion", back_populates="quiz", cascade="all, delete-orphan",passive_deletes=True)
 
 class TriviaQuestion(db.Model):
     __tablename__ = "trivia_question"
@@ -26,7 +25,7 @@ class TriviaQuestion(db.Model):
     topic = db.Column(db.String, nullable=True)
     difficulty = db.Column(db.String, nullable=True)
     answers = db.Column(JSON, nullable=False)  # ["correct","w1","w2","w3"]
-    quiz_id = db.Column(db.Integer, db.ForeignKey("quiz.id"), nullable=False)
+    quiz_id = db.Column(db.Integer, db.ForeignKey("quiz.id", ondelete="CASCADE"), nullable=False)
     quiz = db.relationship("Quiz", back_populates="questions")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
