@@ -1,4 +1,3 @@
-# backend/app.py
 import os
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -30,22 +29,23 @@ def create_app() -> Flask:
     db.init_app(app)
     Migrate(app, db)
 
-    # import & register blueprints
-    from blueprints.users import user_bp
-    from blueprints.library import library_bp
-    app.register_blueprint(user_bp, url_prefix="/users")
+   # import & register blueprints
+    from routes.library import library_bp
+    from routes.users import user_bp
+
     app.register_blueprint(library_bp, url_prefix="/library")
+    app.register_blueprint(user_bp, url_prefix="/users")
 
     # (important) import models so Alembic/Autogenerate "sees" them
     with app.app_context():
-        from models import (  # noqa: F401
-            User,
-            TriviaQuestion,
-            Quiz,
-            QuizSession,
-            QuizAnswerLog,
-            LeaderboardEntry,
+        from models import (
+            User, TriviaQuestion, Quiz, QuizSession, QuizAnswerLog, LeaderboardEntry,
         )
+
+        # auto-seed
+        from utils.seeder import auto_seed
+        auto_seed()
+
 
     # ---------- Health ----------
     @app.get("/")
