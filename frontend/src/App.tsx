@@ -1,4 +1,4 @@
-// src/App.tsx
+// frontend/src/App.tsx
 import React, { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { CssBaseline, ThemeProvider, createTheme, Box } from "@mui/material";
@@ -15,21 +15,25 @@ import CreateHome from "@/pages/create/CreateHome";
 import CreateQuizForm from "@/pages/create/CreateQuizForm";
 import AddQuestionForm from "@/pages/create/AddQuestionForm";
 
+function getInitialBaseUrl(): string {
+  const fromLocal = window.localStorage.getItem("baseUrl");
+  if (fromLocal && fromLocal.trim()) return fromLocal.trim();
+  const fromEnv = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+  return "/api";
+}
+
 export default function App() {
-  // src/App.tsx (קטע רלוונטי)
-  const envBase = __API_BASE__; // מגיע מה-define של Vite
-  const stored = typeof window !== "undefined" ? localStorage.getItem("baseUrl") : null;
-  const [baseUrl, setBaseUrl] = useState<string>(stored || envBase);
+  const [baseUrl, setBaseUrl] = useState<string>(getInitialBaseUrl());
+  const nav = useNavigate();
 
-
-  // שומר/מסנכרן כל שינוי בנב־בר ל-localStorage כדי שיישמר לרענון הבא
   useEffect(() => {
+    // שמירה אוטומטית של הערך לטובת רענון/פתיחה מחדש
     try {
-      localStorage.setItem("baseUrl", baseUrl);
-    } catch { }
+      window.localStorage.setItem("baseUrl", baseUrl || "");
+    } catch {}
   }, [baseUrl]);
 
-  const nav = useNavigate();
   function logout() {
     localStorage.removeItem("auth");
     nav("/login");
