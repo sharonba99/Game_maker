@@ -1,48 +1,49 @@
 Trivia Creator 🎮
 
-A fullstack trivia game built with Flask (backend) and React (frontend).
+A full-stack trivia game built with Flask (backend) and React (Vite) (frontend).
 Players can sign up, create quizzes, play timed sessions, and compete on the leaderboard.
 
 Users: signup/login (hashed passwords)
 
 Quizzes: list by topic, create, add questions, bulk import
 
-Game sessions: per-question timing on the client (sends client_ms); total time is stored and used as a tie-breaker
+Game sessions: per-question timing (client sends client_ms); total time used as a tiebreaker
 
-Leaderboard: top scores per quiz (tie-break by total duration)
+Leaderboard: top scores per quiz (score ↓, then total duration ↑)
 
-CORS ready (Vite/CRA)
+CORS-ready (Vite/CRA)
 
-SQLite for dev / Postgres via DATABASE_URL
+DB: SQLite for dev / Postgres via DATABASE_URL
 
+Tech Stack
 
-## Tech Stack
-- **Backend**: Python, Flask, Flask-CORS, SQLAlchemy, Flask-Migrate, python-dotenv
-- **Frontend**: React (Vite), Material UI (optional styling)
-- **Database**: SQLite (local) / Postgres (via `DATABASE_URL`)
-- **Other**: Alembic migrations, dotenv for config
+Backend: Python, Flask, Flask-CORS, SQLAlchemy, Flask-Migrate, python-dotenv
 
+Frontend: React (Vite), Material UI
+
+Database: SQLite (local) / Postgres (DATABASE_URL)
+
+Other: Alembic migrations, dotenv for config
 
 Project Structure
-
 ├─ backend/
-│  ├─ app.py                      # Flask app factory, registers blueprints, CORS, DB, Migrate
-│  ├─ models.py                   # SQLAlchemy models (User, Quiz, TriviaQuestion, QuizSession, QuizAnswerLog, LeaderboardEntry)
+│  ├─ app.py                      # Flask app factory: blueprints, CORS, DB, Migrate
+│  ├─ models.py                   # SQLAlchemy models: User, Quiz, TriviaQuestion, QuizSession, QuizAnswerLog, LeaderboardEntry
 │  ├─ routes/
 │  │  ├─ __init__.py              # (optional) routes aggregator
 │  │  ├─ users.py                 # /users: signup, login, (optional) list
 │  │  └─ library.py               # /library: topics, quizzes CRUD-lite, import, sessions, leaderboard
 │  ├─ utils/
-│  │  ├─ db.py                    # Shared SQLAlchemy() instance and init helpers
+│  │  ├─ db.py                    # Shared SQLAlchemy() instance & init helpers
 │  │  └─ helpers.py               # JSON helpers (j_ok/j_err), normalization, etc.
 │  ├─ data/
 │  │  └─ seed_quizzes.json        # Example quizzes (safe to commit)
 │  ├─ tools/
-│  │  └─ seed_json.py             # Simple seeder: POSTs seed_quizzes.json to the API
-│  ├─ migrations/                 # Alembic (Flask-Migrate) — keep or ignore versions per repo policy
+│  │  └─ seed_json.py             # Seeder: POSTs seed_quizzes.json to the API
+│  ├─ migrations/                 # Alembic (Flask-Migrate)
 │  └─ instance/
-│     └─ .gitkeep                 # Local SQLite lives here as users.db (not committed)
-
+│     └─ .gitkeep                 # Local SQLite (users.db) lives here (not committed)
+│
 ├─ frontend/
 │  ├─ src/
 │  │  ├─ App.tsx                  # App root, routes, theme; reads API base from env/LocalStorage
@@ -50,9 +51,9 @@ Project Structure
 │  │  │  └─ RequireAuth.tsx       # Guard: redirects to /login if not authenticated
 │  │  ├─ components/
 │  │  │  ├─ Navbar.tsx            # Top bar with Base URL input, nav links, logout
-│  │  │  └─ Crumbs.tsx            # Small breadcrumbs helper
+│  │  │  └─ Crumbs.tsx            # Breadcrumbs helper
 │  │  ├─ hooks/
-│  │  │  └─ useApi.ts             # Tiny fetch wrapper (get/post returning {ok,data|error})
+│  │  │  └─ useApi.ts             # Tiny fetch wrapper (get/post → {ok,data|error})
 │  │  ├─ utils/
 │  │  │  └─ time.ts               # TIME_LIMIT_SEC, msToSec, etc.
 │  │  ├─ types/
@@ -62,212 +63,205 @@ Project Structure
 │  │     ├─ play/
 │  │     │  ├─ PlayPicker.tsx     # Topic + Quiz picker, starts session
 │  │     │  ├─ GameScreen.tsx     # Full-screen game; stable per-question timer; submits answers
-│  │     │  └─ LeaderboardScreen.tsx # Top scores table (score + duration)
+│  │     │  └─ LeaderboardScreen.tsx  # Top scores table (score + duration)
 │  │     └─ create/
-│  │        ├─ CreateHome.tsx     # Two big buttons: Create Quiz / Add Questions
-│  │        ├─ CreateQuizForm.tsx # Create quiz (title/topic/difficulty)
+│  │        ├─ CreateHome.tsx     # Two buttons: Create Quiz / Add Questions
+│  │        ├─ CreateQuizForm.tsx # Create quiz (title/topic/…)
 │  │        └─ AddQuestionForm.tsx# Add question to an existing quiz
 │  ├─ public/
-│  │  └─ screenshots/             # Optional screenshots used in README
-│  ├─ package.json                # Frontend dependencies & scripts
-│  └─ vite.config.ts              # Vite config (aliases, env define)
-
+│  │  └─ screenshots/             # Actual screenshots used in README
+│  ├─ package.json
+│  └─ vite.config.ts
+│
 ├─ .env                           # Local env (not committed) — includes VITE_API_BASE_URL, Flask vars
-├─ .env.example                   # Safe template shared with teammates
-├─ requirements.txt               # Backend deps (Flask, SQLAlchemy, Migrate, etc.)
+├─ .env.example                   # Safe template for teammates
+├─ requirements.txt               # Backend deps
 ├─ README.md
-└─ .gitignore                     # Single repo-wide ignore for frontend + backend
+└─ .gitignore                     # Single repo-wide ignore (frontend + backend)
 
+Environment Variables
+
+Create a root .env (alongside backend/ and frontend/). Example:
+
+# Flask
+FLASK_APP=app:create_app
+FLASK_DEBUG=1
+FLASK_SECRET_KEY=dev-secret-change-me
+
+# CORS (Vite/CRA)
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# Server
+PORT=5001
+
+# Database (default SQLite at backend/instance/users.db)
+# DATABASE_URL=postgresql+psycopg2://user:pass@localhost:5432/game_maker
+
+# Frontend → Backend base URL (Vite reads this from the repo root)
+VITE_API_BASE_URL=http://localhost:5001
+
+
+Commit .env.example (no secrets), and add .env to .gitignore.
+After changing .env, restart the Vite dev server.
 
 Backend — Setup & Run
 
-All commands below are from the backend/ folder.
+Run these from backend/:
 
-1) Create & activate venv + install deps
-
-Windows PowerShell
-
-cd backend
+# Create & activate venv
+# Windows (PowerShell):
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+
+# macOS/Linux:
+# python3 -m venv .venv
+# source .venv/bin/activate
+
+# Install dependencies (requirements.txt is at repo root)
+# Windows:
 pip install -r ..\requirements.txt
+# macOS/Linux:
+# pip install -r ../requirements.txt
 
-macOS/Linux
-
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r ../requirements.txt
-
-2) Initialize/upgrade DB (migrations)
-# Windows/macOS/Linux (from backend with venv active)
-$env:FLASK_APP="app:create_app"  # PowerShell
-# export FLASK_APP=app:create_app # bash/zsh
-
-# First-time project
+# Initialize/upgrade DB (Alembic)
+# Windows PowerShell:
+$env:FLASK_APP="app:create_app"
 flask db upgrade
 
+# macOS/Linux:
+# export FLASK_APP=app:create_app
+# flask db upgrade
 
-If you ever change models, do:
-
-flask db migrate -m "describe change"
-flask db upgrade
-
-
-Reset dev DB (if needed):
-
-# Danger: deletes local DB only (SQLite)
-Remove-Item -Force .\instance\users.db     # Windows
-# rm -f instance/users.db                  # macOS/Linux
-flask db upgrade
-
-3) Run dev server
+# Run dev server (http://localhost:5001)
 python app.py
 
 
-Runs on: http://localhost:5001
-
 Health check: GET / → {"ok": true, "db": "<engine url>"}
 
-Seeding Example Data
+Reset dev DB (danger: deletes local SQLite only):
 
-The repo ships with backend/data/seed_quizzes.json and a small seeder:
+# Windows:
+Remove-Item -Force .\instance\users.db
+flask db upgrade
 
-# In another terminal (while the backend is running)
+# macOS/Linux:
+# rm -f instance/users.db
+# flask db upgrade
+
+(Optional) Seed example data
+
+Open another terminal while the backend is running:
+
+# Windows PowerShell:
 cd backend
-.\.venv\Scripts\Activate.ps1   # if needed
+.\.venv\Scripts\Activate.ps1
 python tools/seed_json.py
 
-
-If successful:
-
-Status: 201
-{"ok":true,"data":{"created":[...]} }
-
-
-The seeder POSTs to POST /library/import with the JSON payload.
+# macOS/Linux:
+# cd backend
+# source .venv/bin/activate
+# python tools/seed_json.py
 
 Frontend — Setup & Run
 
-From frontend/:
+Run these from frontend/:
 
 npm install
 npm run dev
+# Runs on: http://localhost:5173
 
 
-Runs on: http://localhost:5173
+The app reads the backend URL from the root .env via VITE_API_BASE_URL.
 
-The app reads the backend URL from the **root** `.env` via `VITE_API_BASE_URL`.
-You can override it at runtime in the navbar’s “Base URL” field (it’s stored in localStorage).
-After changing `.env`, restart `npm run dev`.
+You can override it at runtime in the navbar’s Base URL field (localStorage).
 
-
-The App.tsx already calls backend endpoints at http://localhost:5001 by default (you can edit the “Base URL” field in the navbar at runtime).
+After changing .env, restart npm run dev.
 
 API (Quick Reference)
 Users (/users)
 
-POST /users/signup → { username, password } → { id, username }
+POST /users/signup → { username, password } → returns { id, username }
 
-POST /users/login → { username, password } → { user_id, username }
+POST /users/login → { username, password } → returns { user_id, username }
 
-GET /users/ → list (optional)
+GET /users/ → list users (optional)
 
 Library & Game (/library)
 
 GET /library/topics
 
-GET /library/quizzes?topic=...
+GET /library/quizzes?topic=<topic>
 
 GET /library/quizzes/<quiz_id>
 
-POST /library/quizzes → create ({ title, topic, difficulty? })
+POST /library/quizzes → create quiz
+body: { title, topic, difficulty? }
 
-POST /library/questions → add ({ quiz_id, question, difficulty?, answers[4] })
+POST /library/questions → add question
+body: { quiz_id, question, difficulty?, answers: [a0, a1, a2, a3] }
 Note: answers[0] is the correct answer.
 
-POST /library/import → bulk import (uses the same JSON schema as data/seed_quizzes.json)
+POST /library/import → bulk import (schema like backend/data/seed_quizzes.json)
 
-POST /library/session/create → { player_name, quiz_id } → { session_id }
+POST /library/session/create → start session
+body: { player_name, quiz_id } → returns { session_id }
 
-GET /library/session/<sid>/current → current Q (options shuffled)
+GET /library/session/<sid>/current → current question (options are shuffled)
 
-POST /library/session/<sid>/answer → { answer, client_ms }
+POST /library/session/<sid>/answer → submit answer
+body: { answer, client_ms } (optionally also { answer_index })
 
-scoring: awarded = max(100, 1000 - client_ms/2) if correct; else 0
-
-server aggregates total time across the session to LeaderboardEntry.duration_ms
-
-GET /library/leaderboard?quiz_id=... → top 10
+GET /library/leaderboard?quiz_id=<id> → top 10
 Sorted by score desc, then duration_ms asc, then id asc
 
-Response envelope (normalized):
-
+Response envelope (normalized)
 { "ok": true,  "data": ... }
 { "ok": false, "error": { "code": "bad_request", "message": "..." } }
 
 Timer & Scoring (How it works)
 
-The frontend starts a per-question timer (performance.now()) when it receives the question.
+The frontend starts a per-question timer (performance.now()) when a question is received.
 
 On answer, it POSTs client_ms to /library/session/<sid>/answer.
 
 The backend:
 
-checks correctness against answers[0]
+checks correctness against answers[0];
 
-calculates awarded points using client_ms
+computes awarded points: max(100, 1000 - client_ms/2) if correct, else 0;
 
-logs the answer to QuizAnswerLog
+logs to QuizAnswerLog;
 
-when the session finishes, aggregates total time (sum of client_ms) and writes LeaderboardEntry(duration_ms).
+on session end, sums all client_ms and writes LeaderboardEntry.duration_ms.
 
-The frontend shows:
-
-current score while playing
-
-on finish: final score and can (optionally) show total time from leaderboard (already stored server-side)
-
-Already wired in App.tsx: “Play Again / Back” UX to restart smoothly.
+The frontend shows current score while playing; on finish, see final score + total time (server-stored).
 
 Onboarding for Teammates (TL;DR)
 git clone <repo>
 cd Game_maker
 
-# Backend
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-flask db upgrade
-python app.py
-
-# (optional) Seed example data – in another terminal while backend runs:
-python tools/seed_json.py
-
-# Frontend
-cd ..\frontend
-npm install
-npm run dev
+# Backend — see "Backend — Setup & Run"
+# Frontend — see "Frontend — Setup & Run"
 
 Troubleshooting
 
 ModuleNotFoundError: No module named 'flask'
-venv not active / deps missing. Activate and pip install -r requirements.txt.
+venv not active / deps missing. Activate venv and pip install -r requirements.txt.
 
-OperationalError: no such table: ...
-Run flask db upgrade. If still failing and you’re on local dev, delete backend/instance/users.db and upgrade again.
+OperationalError: no such table: …
+Run flask db upgrade. Still failing on local dev? Delete backend/instance/users.db and upgrade again.
 
 Target database is not up to date.
-Run flask db upgrade. If the DB is already correct but Alembic is confused, run flask db stamp head.
+Run flask db upgrade. If Alembic is confused but schema is correct, run flask db stamp head.
 
 no such column: user.created_at
-You added created_at to the model after the DB existed. Create a migration (flask db migrate -m "add created_at") and flask db upgrade.
-For dev only, you can reset the SQLite file and upgrade.
+You added a column after DB existed. Create migration:
+flask db migrate -m "add created_at" then flask db upgrade.
+For dev only, you can reset SQLite and upgrade.
 
-Roadmap by Phases
+Roadmap by Phases (Updated)
 
-Phase 1 — Core (✅)
+Phase 1 — Core (✅ done)
 
 User signup/login (hash)
 
@@ -287,15 +281,17 @@ Better error handling/helpers
 
 JSON import UX
 
+Frontend filters – Category ✅
+
+Frontend filters – Difficulty ⏳ not yet
+
 Phase 3 — Advanced (🗺 planned)
 
 Docker deployment
 
 Multiplayer / realtime
 
-Frontend filters (category/difficulty)
-
-Demo screenshots/GIFs
+Demo screenshots/GIFs ✅
 
 ## 📸 Demo
 
