@@ -1,0 +1,31 @@
+name: Sync fork from upstream
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # Runs every day at 06:17 UTC
+  workflow_dispatch: {}     # Manual run option
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream and fetch
+        run: |
+          git remote add upstream https://github.com/<sharon-username>/<repo-name>.git
+          git fetch upstream
+
+      - name: Rebase main on upstream/main
+        run: |
+          git checkout main
+          git rebase upstream/main || (git rebase --abort && exit 1)
+
+      - name: Push updated main
+        run: git push origin main --force-with-lease
